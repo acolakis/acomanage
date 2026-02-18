@@ -1,0 +1,628 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================
+// USERS & AUTH
+// ============================================================
+
+enum UserRole {
+  ADMIN
+  EMPLOYEE
+  CLIENT
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  firstName    String   @map("first_name")
+  lastName     String   @map("last_name")
+  role         UserRole @default(EMPLOYEE)
+  phone        String?
+  isActive     Boolean  @default(true) @map("is_active")
+  lastLoginAt  DateTime? @map("last_login_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  permissions       UserPermission[]
+  companyUsers      CompanyUser[]
+  createdCompanies  Company[]          @relation("CompanyCreatedBy")
+  createdDocuments  Document[]         @relation("DocumentCreatedBy")
+  assignedDocuments CompanyDocument[]   @relation("DocumentAssignedBy")
+  conductedInspections Inspection[]    @relation("InspectionInspector")
+  propagations      DocumentPropagation[] @relation("PropagatedBy")
+  determinedCategories CompanyCategory[] @relation("DeterminedBy")
+  createdSubstances HazardousSubstance[] @relation("SubstanceCreatedBy")
+  reviewedExtractions SdsExtraction[]  @relation("ExtractionReviewedBy")
+  createdMachines   Machine[]          @relation("MachineCreatedBy")
+  reviewedManualExtractions ManualExtraction[] @relation("ManualExtractionReviewedBy")
+  assessedRiskAssessments RiskAssessment[] @relation("AssessedBy")
+  approvedRiskAssessments RiskAssessment[] @relation("ApprovedBy")
+  notifications     Notification[]
+  auditLogs         AuditLog[]
+  createdInspectionTemplates InspectionTemplate[] @relation("InspectionTemplateCreatedBy")
+
+  @@map("users")
+}
+
+model UserPermission {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  permission String
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, permission])
+  @@map("user_permissions")
+}
+
+// ============================================================
+// INDUSTRIES & DOCUMENT CATEGORIES
+// ============================================================
+
+model Industry {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  name        String
+  description String?
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  companies          Company[]
+  defaultCategories  IndustryDefaultCategory[]
+  inspectionTemplates InspectionTemplate[]
+
+  @@map("industries")
+}
+
+model DocumentCategory {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  name        String
+  fullName    String   @map("full_name")
+  parentGroup String   @map("parent_group")
+  description String?
+  sortOrder   Int      @default(0) @map("sort_order")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  industryDefaults  IndustryDefaultCategory[]
+  companyCategories CompanyCategory[]
+  documents         Document[]
+
+  @@map("document_categories")
+}
+
+model IndustryDefaultCategory {
+  id         String @id @default(uuid())
+  industryId String @map("industry_id")
+  categoryId String @map("category_id")
+
+  industry Industry         @relation(fields: [industryId], references: [id], onDelete: Cascade)
+  category DocumentCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([industryId, categoryId])
+  @@map("industry_default_categories")
+}
+
+// ============================================================
+// COMPANIES (Betriebe / Kunden)
+// ============================================================
+
+model Company {
+  id                  String   @id @default(uuid())
+  companyNumber       String?  @unique @map("company_number")
+  name                String
+  legalForm           String?  @map("legal_form")
+  industryId          String?  @map("industry_id")
+  street              String?
+  zip                 String?
+  city                String?
+  phone               String?
+  email               String?
+  website             String?
+  contactName         String?  @map("contact_name")
+  contactPhone        String?  @map("contact_phone")
+  contactEmail        String?  @map("contact_email")
+  employeeCount       Int?     @map("employee_count")
+  berufsgenossenschaft String?
+  bgMemberNumber      String?  @map("bg_member_number")
+  notes               String?
+  isActive            Boolean  @default(true) @map("is_active")
+  contractStart       DateTime? @map("contract_start") @db.Date
+  contractEnd         DateTime? @map("contract_end") @db.Date
+  createdById         String?  @map("created_by")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  industry            Industry?         @relation(fields: [industryId], references: [id])
+  createdBy           User?             @relation("CompanyCreatedBy", fields: [createdById], references: [id])
+  categories          CompanyCategory[]
+  users               CompanyUser[]
+  documents           CompanyDocument[]
+  inspections         Inspection[]
+  hazardousSubstances HazardousSubstance[]
+  machines            Machine[]
+  riskAssessments     RiskAssessment[]
+
+  @@map("companies")
+}
+
+model CompanyCategory {
+  id           String    @id @default(uuid())
+  companyId    String    @map("company_id")
+  categoryId   String    @map("category_id")
+  isRelevant   Boolean   @default(true) @map("is_relevant")
+  determinedAt DateTime? @map("determined_at")
+  determinedById String? @map("determined_by")
+  notes        String?
+
+  company      Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  category     DocumentCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  determinedBy User?            @relation("DeterminedBy", fields: [determinedById], references: [id])
+
+  @@unique([companyId, categoryId])
+  @@map("company_categories")
+}
+
+model CompanyUser {
+  id        String @id @default(uuid())
+  companyId String @map("company_id")
+  userId    String @map("user_id")
+  role      String @default("viewer") // 'viewer' | 'manager'
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, userId])
+  @@map("company_users")
+}
+
+// ============================================================
+// DOCUMENTS (Template System)
+// ============================================================
+
+model Document {
+  id          String   @id @default(uuid())
+  categoryId  String   @map("category_id")
+  title       String
+  description String?
+  fileType    String?  @map("file_type")
+  filePath    String?  @map("file_path")
+  fileSize    Int?     @map("file_size")
+  isTemplate  Boolean  @default(false) @map("is_template")
+  templateId  String?  @map("template_id")
+  version     Int      @default(1)
+  status      String   @default("active") // 'draft' | 'active' | 'archived'
+  createdById String?  @map("created_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  category         DocumentCategory     @relation(fields: [categoryId], references: [id])
+  template         Document?            @relation("DocumentTemplate", fields: [templateId], references: [id])
+  derivedDocuments Document[]           @relation("DocumentTemplate")
+  createdBy        User?                @relation("DocumentCreatedBy", fields: [createdById], references: [id])
+  companyDocuments CompanyDocument[]
+  propagations     DocumentPropagation[]
+  sdsSubstance     HazardousSubstance?  @relation("SdsDocument")
+  gbaSubstance     HazardousSubstance?  @relation("GbaDocument")
+  manualMachine    Machine?             @relation("ManualDocument")
+  baMachine        Machine?             @relation("BaDocument")
+
+  @@map("documents")
+}
+
+model CompanyDocument {
+  id             String    @id @default(uuid())
+  companyId      String    @map("company_id")
+  documentId     String    @map("document_id")
+  syncedVersion  Int       @default(1) @map("synced_version")
+  isCurrent      Boolean   @default(true) @map("is_current")
+  assignedAt     DateTime  @default(now()) @map("assigned_at")
+  syncedAt       DateTime? @map("synced_at")
+  assignedById   String?   @map("assigned_by")
+
+  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  assignedBy User?    @relation("DocumentAssignedBy", fields: [assignedById], references: [id])
+
+  @@unique([companyId, documentId])
+  @@map("company_documents")
+}
+
+model DocumentPropagation {
+  id            String   @id @default(uuid())
+  documentId    String   @map("document_id")
+  fromVersion   Int      @map("from_version")
+  toVersion     Int      @map("to_version")
+  companyIds    String[] @map("company_ids")
+  propagatedById String? @map("propagated_by")
+  propagatedAt  DateTime @default(now()) @map("propagated_at")
+  notes         String?
+
+  document    Document @relation(fields: [documentId], references: [id])
+  propagatedBy User?   @relation("PropagatedBy", fields: [propagatedById], references: [id])
+
+  @@map("document_propagations")
+}
+
+// ============================================================
+// INSPECTIONS (Betriebsbegehungen)
+// ============================================================
+
+model InspectionTemplate {
+  id          String   @id @default(uuid())
+  name        String
+  industryId  String?  @map("industry_id")
+  description String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdById String?  @map("created_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  industry Industry?                  @relation(fields: [industryId], references: [id])
+  createdBy User?                     @relation("InspectionTemplateCreatedBy", fields: [createdById], references: [id])
+  sections InspectionTemplateSection[]
+  inspections Inspection[]
+
+  @@map("inspection_templates")
+}
+
+model InspectionTemplateSection {
+  id          String @id @default(uuid())
+  templateId  String @map("template_id")
+  sectionCode String @map("section_code")
+  title       String
+  sortOrder   Int    @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  template InspectionTemplate       @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  items    InspectionTemplateItem[]
+  findings InspectionFinding[]
+
+  @@map("inspection_template_sections")
+}
+
+model InspectionTemplateItem {
+  id             String  @id @default(uuid())
+  sectionId      String  @map("section_id")
+  itemKey        String  @map("item_key")
+  label          String
+  description    String?
+  legalReference String? @map("legal_reference")
+  sortOrder      Int     @map("sort_order")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  section  InspectionTemplateSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  findings InspectionFinding[]
+
+  @@map("inspection_template_items")
+}
+
+enum InspectionType {
+  INITIAL   // Erstbegehung
+  REGULAR   // Regelbegehung
+  FOLLOWUP  // Nachkontrolle
+  SPECIAL   // Sonderbegehung
+}
+
+enum InspectionStatus {
+  DRAFT
+  IN_PROGRESS
+  COMPLETED
+  SENT
+}
+
+model Inspection {
+  id                    String           @id @default(uuid())
+  companyId             String           @map("company_id")
+  templateId            String?          @map("template_id")
+  inspectionNumber      String?          @map("inspection_number")
+  inspectionDate        DateTime         @map("inspection_date") @db.Date
+  inspectionType        InspectionType   @map("inspection_type")
+  previousInspectionId  String?          @map("previous_inspection_id")
+  inspectorId           String           @map("inspector_id")
+  attendees             String?
+  generalNotes          String?          @map("general_notes")
+  status                InspectionStatus @default(DRAFT)
+  completedAt           DateTime?        @map("completed_at")
+  pdfPath               String?          @map("pdf_path")
+  createdAt             DateTime         @default(now()) @map("created_at")
+  updatedAt             DateTime         @updatedAt @map("updated_at")
+
+  company             Company             @relation(fields: [companyId], references: [id])
+  template            InspectionTemplate? @relation(fields: [templateId], references: [id])
+  previousInspection  Inspection?         @relation("InspectionFollowUp", fields: [previousInspectionId], references: [id])
+  followUpInspections Inspection[]        @relation("InspectionFollowUp")
+  inspector           User                @relation("InspectionInspector", fields: [inspectorId], references: [id])
+  findings            InspectionFinding[]
+  photos              InspectionPhoto[]
+
+  @@map("inspections")
+}
+
+enum RiskLevel {
+  NIEDRIG   // low
+  MITTEL    // medium
+  HOCH      // high
+  KRITISCH  // critical
+}
+
+enum FindingStatus {
+  OPEN
+  IN_PROGRESS
+  COMPLETED
+  OVERDUE
+}
+
+model InspectionFinding {
+  id                String        @id @default(uuid())
+  inspectionId      String        @map("inspection_id")
+  sectionId         String?       @map("section_id")
+  templateItemId    String?       @map("template_item_id")
+  findingNumber     Int           @map("finding_number")
+  description       String
+  riskLevel         RiskLevel?    @map("risk_level")
+  measure           String?
+  responsible       String?
+  deadline          DateTime?     @db.Date
+  status            FindingStatus @default(OPEN)
+  completedAt       DateTime?     @map("completed_at")
+  previousFindingId String?       @map("previous_finding_id")
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+
+  inspection      Inspection                 @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  section         InspectionTemplateSection? @relation(fields: [sectionId], references: [id])
+  templateItem    InspectionTemplateItem?    @relation(fields: [templateItemId], references: [id])
+  previousFinding InspectionFinding?         @relation("FindingFollowUp", fields: [previousFindingId], references: [id])
+  followUpFindings InspectionFinding[]       @relation("FindingFollowUp")
+  photos          InspectionPhoto[]
+
+  @@map("inspection_findings")
+}
+
+model InspectionPhoto {
+  id           String    @id @default(uuid())
+  inspectionId String    @map("inspection_id")
+  findingId    String?   @map("finding_id")
+  filePath     String    @map("file_path")
+  fileName     String?   @map("file_name")
+  caption      String?
+  takenAt      DateTime? @map("taken_at")
+  sortOrder    Int       @default(0) @map("sort_order")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  inspection Inspection         @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  finding    InspectionFinding? @relation(fields: [findingId], references: [id], onDelete: SetNull)
+
+  @@map("inspection_photos")
+}
+
+// ============================================================
+// HAZARDOUS SUBSTANCES (Gefahrstoffe)
+// ============================================================
+
+model HazardousSubstance {
+  id               String   @id @default(uuid())
+  companyId        String   @map("company_id")
+  lfdNr            Int?     @map("lfd_nr")
+  tradeName        String   @map("trade_name")
+  manufacturer     String?
+  casNumber        String?  @map("cas_number")
+  sdsDate          DateTime? @map("sds_date") @db.Date
+  gbaDate          DateTime? @map("gba_date") @db.Date
+  gbaNumber        String?  @map("gba_number")
+  usageLocation    String?  @map("usage_location")
+  usageProcess     String?  @map("usage_process")
+  exposedPersons   Int?     @map("exposed_persons")
+  skinContact      Boolean  @default(false) @map("skin_contact")
+  usageFrequency   String?  @map("usage_frequency")
+  labeling         String?
+  protectiveMeasures String? @map("protective_measures")
+  containerSize    String?  @map("container_size")
+  storageLocation  String?  @map("storage_location")
+  storageAmount    String?  @map("storage_amount")
+  ghsPictograms    String[] @map("ghs_pictograms")
+  hStatements      String[] @map("h_statements")
+  pStatements      String[] @map("p_statements")
+  signalWord       String?  @map("signal_word")
+  wgk              String?
+  status           String   @default("active")
+  sdsDocumentId    String?  @unique @map("sds_document_id")
+  gbaDocumentId    String?  @unique @map("gba_document_id")
+  createdById      String?  @map("created_by")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  company     Company    @relation(fields: [companyId], references: [id])
+  sdsDocument Document?  @relation("SdsDocument", fields: [sdsDocumentId], references: [id])
+  gbaDocument Document?  @relation("GbaDocument", fields: [gbaDocumentId], references: [id])
+  createdBy   User?      @relation("SubstanceCreatedBy", fields: [createdById], references: [id])
+  extractions SdsExtraction[]
+
+  @@map("hazardous_substances")
+}
+
+model SdsExtraction {
+  id               String   @id @default(uuid())
+  substanceId      String?  @map("substance_id")
+  sourceFile       String   @map("source_file")
+  extractionStatus String   @default("pending") @map("extraction_status")
+  rawExtraction    Json?    @map("raw_extraction")
+  substanceName    String?  @map("substance_name")
+  hazards          Json?
+  protectiveMeasures Json?  @map("protective_measures")
+  firstAid         Json?    @map("first_aid")
+  emergencyBehavior Json?   @map("emergency_behavior")
+  disposal         Json?
+  storage          Json?
+  confidenceScore  Float?   @map("confidence_score")
+  reviewedById     String?  @map("reviewed_by")
+  reviewedAt       DateTime? @map("reviewed_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  substance  HazardousSubstance? @relation(fields: [substanceId], references: [id], onDelete: Cascade)
+  reviewedBy User?               @relation("ExtractionReviewedBy", fields: [reviewedById], references: [id])
+
+  @@map("sds_extractions")
+}
+
+// ============================================================
+// MACHINES (Maschinenbetriebsanweisungen)
+// ============================================================
+
+model Machine {
+  id                String   @id @default(uuid())
+  companyId         String   @map("company_id")
+  machineNumber     String?  @map("machine_number")
+  name              String
+  manufacturer      String?
+  model             String?
+  serialNumber      String?  @map("serial_number")
+  location          String?
+  yearOfManufacture Int?     @map("year_of_manufacture")
+  status            String   @default("active")
+  manualDocumentId  String?  @unique @map("manual_document_id")
+  baDocumentId      String?  @unique @map("ba_document_id")
+  createdById       String?  @map("created_by")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  company        Company   @relation(fields: [companyId], references: [id])
+  manualDocument Document? @relation("ManualDocument", fields: [manualDocumentId], references: [id])
+  baDocument     Document? @relation("BaDocument", fields: [baDocumentId], references: [id])
+  createdBy      User?     @relation("MachineCreatedBy", fields: [createdById], references: [id])
+  extractions    ManualExtraction[]
+
+  @@map("machines")
+}
+
+model ManualExtraction {
+  id               String   @id @default(uuid())
+  machineId        String?  @map("machine_id")
+  sourceFile       String   @map("source_file")
+  extractionStatus String   @default("pending") @map("extraction_status")
+  rawExtraction    Json?    @map("raw_extraction")
+  scope            Json?
+  hazards          Json?
+  protectiveMeasures Json?  @map("protective_measures")
+  malfunctions     Json?
+  firstAid         Json?    @map("first_aid")
+  maintenance      Json?
+  confidenceScore  Float?   @map("confidence_score")
+  reviewedById     String?  @map("reviewed_by")
+  reviewedAt       DateTime? @map("reviewed_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  machine    Machine? @relation(fields: [machineId], references: [id], onDelete: Cascade)
+  reviewedBy User?    @relation("ManualExtractionReviewedBy", fields: [reviewedById], references: [id])
+
+  @@map("manual_extractions")
+}
+
+// ============================================================
+// RISK ASSESSMENTS (Gefährdungsbeurteilungen)
+// ============================================================
+
+model RiskAssessment {
+  id              String    @id @default(uuid())
+  companyId       String    @map("company_id")
+  title           String
+  assessmentType  String    @map("assessment_type") // 'activity', 'workplace', 'substance', 'machine', 'psyche'
+  legalBasis      String?   @map("legal_basis")
+  assessedArea    String?   @map("assessed_area")
+  status          String    @default("draft") // 'draft', 'active', 'review_needed', 'archived'
+  version         Int       @default(1)
+  assessmentDate  DateTime? @map("assessment_date") @db.Date
+  nextReviewDate  DateTime? @map("next_review_date") @db.Date
+  assessedById    String?   @map("assessed_by")
+  approvedById    String?   @map("approved_by")
+  approvedAt      DateTime? @map("approved_at")
+  pdfPath         String?   @map("pdf_path")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  company    Company                @relation(fields: [companyId], references: [id])
+  assessedBy User?                  @relation("AssessedBy", fields: [assessedById], references: [id])
+  approvedBy User?                  @relation("ApprovedBy", fields: [approvedById], references: [id])
+  hazards    RiskAssessmentHazard[]
+
+  @@map("risk_assessments")
+}
+
+model RiskAssessmentHazard {
+  id                  String    @id @default(uuid())
+  assessmentId        String    @map("assessment_id")
+  hazardNumber        Int       @map("hazard_number")
+  hazardFactor        String    @map("hazard_factor")
+  hazardCategory      String?   @map("hazard_category")
+  description         String?
+  probability         Int?      @db.SmallInt
+  severity            Int?      @db.SmallInt
+  riskLevel           String?   @map("risk_level")
+  measure             String?
+  measureType         String?   @map("measure_type") // 'T', 'O', 'P'
+  responsible         String?
+  deadline            DateTime? @db.Date
+  status              String    @default("open")
+  effectivenessCheck  String?   @map("effectiveness_check")
+  effectivenessDate   DateTime? @map("effectiveness_date") @db.Date
+  sortOrder           Int       @default(0) @map("sort_order")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  assessment RiskAssessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+
+  @@map("risk_assessment_hazards")
+}
+
+// ============================================================
+// NOTIFICATIONS
+// ============================================================
+
+model Notification {
+  id            String    @id @default(uuid())
+  userId        String    @map("user_id")
+  type          String
+  title         String
+  message       String?
+  referenceType String?   @map("reference_type")
+  referenceId   String?   @map("reference_id")
+  isRead        Boolean   @default(false) @map("is_read")
+  readAt        DateTime? @map("read_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+// ============================================================
+// AUDIT LOG
+// ============================================================
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?  @map("user_id")
+  action     String
+  entityType String   @map("entity_type")
+  entityId   String?  @map("entity_id")
+  details    Json?
+  ipAddress  String?  @map("ip_address")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@map("audit_log")
+}
