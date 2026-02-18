@@ -49,8 +49,10 @@ The app uses two route groups with separate layouts:
 | `/dokumente` | Document templates & propagation |
 | `/begehungen` | Safety inspections |
 | `/gefahrstoffe` | Hazardous substances + AI GBA generation |
+| `/maschinen` | Machine inventory + MBA generation |
 | `/gefaehrdungsbeurteilungen` | Risk assessments (GBU) |
 | `/benachrichtigungen` | Notifications |
+| `/einstellungen` | System settings (admin) |
 | `/portal/*` | Client portal (mirrors above, read-only) |
 
 ### Auth & Roles
@@ -72,7 +74,7 @@ Config extends `next/core-web-vitals` and `next/typescript`. The `_` prefix does
 
 ### Soft Delete Patterns
 - **Company**: `isActive: boolean` field
-- **RiskAssessment / HazardousSubstance**: `status: "archived"` (no `deletedAt` field)
+- **RiskAssessment / HazardousSubstance / Machine**: `status: "archived"` (no `deletedAt` field)
 - **RiskAssessmentHazard**: No soft delete; cascades with parent assessment
 
 ### Prisma Model Name Mapping
