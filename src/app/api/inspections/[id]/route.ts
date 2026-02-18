@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { notifyCompanyUsers } from "@/lib/notifications";
+import { logAudit } from "@/lib/audit";
+import { hasCompanyAccess } from "@/lib/access-control";
 
 // GET /api/inspections/[id] - Get inspection with all details
 export async function GET(
@@ -62,6 +65,10 @@ export async function GET(
       );
     }
 
+    if (!hasCompanyAccess(session, inspection.companyId)) {
+      return NextResponse.json({ error: "Zugriff verweigert" }, { status: 403 });
+    }
+
     return NextResponse.json(inspection);
   } catch (error) {
     console.error("Error fetching inspection:", error);
@@ -103,6 +110,19 @@ export async function PUT(
       },
     });
 
+    logAudit({ userId: session.user.id, action: "update", entityType: "inspection", entityId: params.id, details: { status: body.status } });
+
+    // Notify company users when inspection is completed
+    if (body.status === "COMPLETED") {
+      notifyCompanyUsers(inspection.companyId, {
+        type: "inspection_completed",
+        title: "Begehung abgeschlossen",
+        message: `Die Begehung für ${inspection.company.name} wurde abgeschlossen.`,
+        referenceType: "inspection",
+        referenceId: inspection.id,
+      }).catch(console.error);
+    }
+
     return NextResponse.json(inspection);
   } catch (error) {
     console.error("Error updating inspection:", error);
@@ -143,6 +163,9 @@ export async function DELETE(
     }
 
     await prisma.inspection.delete({ where: { id: params.id } });
+
+    logAudit({ userId: session.user.id, action: "delete", entityType: "inspection", entityId: params.id });
+
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Error deleting inspection:", error);

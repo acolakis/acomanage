@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { logAudit } from "@/lib/audit";
+import { hasCompanyAccess } from "@/lib/access-control";
 
 export async function GET(
   request: NextRequest,
@@ -18,6 +20,22 @@ export async function GET(
       include: {
         company: { select: { id: true, name: true } },
         createdBy: { select: { firstName: true, lastName: true } },
+        extractions: {
+          where: { extractionStatus: "completed" },
+          orderBy: { createdAt: "desc" },
+          select: {
+            id: true,
+            extractionStatus: true,
+            confidenceScore: true,
+            scope: true,
+            hazards: true,
+            protectiveMeasures: true,
+            malfunctions: true,
+            firstAid: true,
+            maintenance: true,
+            createdAt: true,
+          },
+        },
       },
     });
 
@@ -25,7 +43,22 @@ export async function GET(
       return NextResponse.json({ error: "Maschine nicht gefunden" }, { status: 404 });
     }
 
-    return NextResponse.json(machine);
+    if (!hasCompanyAccess(session, machine.companyId)) {
+      return NextResponse.json({ error: "Zugriff verweigert" }, { status: 403 });
+    }
+
+    return NextResponse.json({
+      ...machine,
+      manualExtractions: machine.extractions.map((e) => ({
+        ...e,
+        scope: e.scope ? JSON.parse(JSON.stringify(e.scope)) : null,
+        hazards: e.hazards ? JSON.parse(JSON.stringify(e.hazards)) : null,
+        protectiveMeasures: e.protectiveMeasures ? JSON.parse(JSON.stringify(e.protectiveMeasures)) : null,
+        malfunctions: e.malfunctions ? JSON.parse(JSON.stringify(e.malfunctions)) : null,
+        firstAid: e.firstAid ? JSON.parse(JSON.stringify(e.firstAid)) : null,
+        maintenance: e.maintenance ? JSON.parse(JSON.stringify(e.maintenance)) : null,
+      })),
+    });
   } catch (error) {
     console.error("Fehler beim Abrufen der Maschine:", error);
     return NextResponse.json({ error: "Fehler beim Abrufen der Maschine" }, { status: 500 });
@@ -69,6 +102,8 @@ export async function PUT(
       },
     });
 
+    logAudit({ userId: session.user.id, action: "update", entityType: "machine", entityId: params.id, details: { name: machine.name } });
+
     return NextResponse.json(machine);
   } catch (error) {
     console.error("Fehler beim Aktualisieren der Maschine:", error);
@@ -95,6 +130,8 @@ export async function DELETE(
       where: { id: params.id },
       data: { status: "archived" },
     });
+
+    logAudit({ userId: session.user.id, action: "archive", entityType: "machine", entityId: params.id, details: { name: existing.name } });
 
     return NextResponse.json({ message: "Maschine erfolgreich gelöscht" });
   } catch (error) {

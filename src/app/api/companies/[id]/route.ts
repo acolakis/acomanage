@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { logAudit } from "@/lib/audit";
+import { hasCompanyAccess } from "@/lib/access-control";
 
 // GET /api/companies/[id] - Get single company by id
 export async function GET(
@@ -41,6 +43,10 @@ export async function GET(
         { error: "Unternehmen nicht gefunden" },
         { status: 404 }
       );
+    }
+
+    if (!hasCompanyAccess(session, company.id)) {
+      return NextResponse.json({ error: "Zugriff verweigert" }, { status: 403 });
     }
 
     return NextResponse.json(company);
@@ -138,6 +144,8 @@ export async function PUT(
       },
     });
 
+    logAudit({ userId: session.user.id, action: "update", entityType: "company", entityId: id, details: { name: company.name } });
+
     return NextResponse.json(company);
   } catch (error) {
     console.error("Error updating company:", error);
@@ -180,6 +188,8 @@ export async function DELETE(
       where: { id },
       data: { isActive: false },
     });
+
+    logAudit({ userId: session.user.id, action: "archive", entityType: "company", entityId: id, details: { name: existing.name } });
 
     return NextResponse.json(company);
   } catch (error) {

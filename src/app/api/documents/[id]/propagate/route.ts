@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { notifyCompanyUsers } from "@/lib/notifications";
 
 // POST /api/documents/[id]/propagate - Propagate updated version to selected companies
 export async function POST(
@@ -89,6 +90,17 @@ export async function POST(
         },
       });
     });
+
+    // Notify company users about the propagation
+    for (const cId of companyIds) {
+      notifyCompanyUsers(cId, {
+        type: "document_propagated",
+        title: "Dokument aktualisiert",
+        message: `Das Dokument "${document.title}" wurde auf Version ${document.version} aktualisiert.`,
+        referenceType: "document",
+        referenceId: document.id,
+      }).catch(console.error);
+    }
 
     return NextResponse.json({
       success: true,

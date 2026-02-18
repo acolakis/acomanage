@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import { logAudit } from "@/lib/audit";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -90,6 +91,8 @@ export async function POST(req: NextRequest) {
         role: true,
       },
     });
+
+    logAudit({ userId: session.user.id, action: "create", entityType: "user", entityId: user.id, details: { email, role } });
 
     return NextResponse.json(user, { status: 201 });
   } catch (error) {

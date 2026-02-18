@@ -1,37 +1,12 @@
 import Link from "next/link";
-import { Plus, ShieldAlert, Building2, AlertTriangle } from "lucide-react";
+import { Plus, ShieldAlert, AlertTriangle, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import { prisma } from "@/lib/prisma";
-
-const typeLabels: Record<string, string> = {
-  activity: "Tätigkeitsbezogen",
-  workplace: "Arbeitsplatzbezogen",
-  substance: "Gefahrstoffbezogen",
-  machine: "Maschinenbezogen",
-  psyche: "Psychische Belastungen",
-};
-
-const statusLabels: Record<string, string> = {
-  draft: "Entwurf",
-  active: "Aktiv",
-  review_needed: "Überprüfung nötig",
-  archived: "Archiviert",
-};
-
-const statusColors: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
-  draft: "secondary",
-  active: "default",
-  review_needed: "destructive",
-  archived: "outline",
-};
+import { AssessmentListFilter } from "@/components/risk-assessments/assessment-list-filter";
 
 async function getRiskAssessments() {
   try {
@@ -70,6 +45,8 @@ export default async function GefaehrdungsbeurteilungenPage() {
       },
     })
     .catch(() => 0);
+
+  const serializedAssessments = JSON.parse(JSON.stringify(assessments));
 
   return (
     <div className="space-y-6">
@@ -123,75 +100,7 @@ export default async function GefaehrdungsbeurteilungenPage() {
         </Card>
       </div>
 
-      {/* Assessment List */}
-      <div className="space-y-3">
-        {assessments.length > 0 ? (
-          assessments.map((assessment) => (
-            <Link
-              key={assessment.id}
-              href={`/gefaehrdungsbeurteilungen/${assessment.id}`}
-              className="block"
-            >
-              <Card className="hover:bg-accent/50 transition-colors cursor-pointer">
-                <CardHeader className="pb-2">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <CardTitle className="text-base">
-                        {assessment.title}
-                      </CardTitle>
-                      <CardDescription>
-                        {assessment.company.name} &middot;{" "}
-                        {typeLabels[assessment.assessmentType] ||
-                          assessment.assessmentType}
-                      </CardDescription>
-                    </div>
-                    <Badge variant={statusColors[assessment.status]}>
-                      {statusLabels[assessment.status] || assessment.status}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center gap-6 text-sm text-muted-foreground">
-                    {assessment.assessmentDate && (
-                      <span>
-                        {new Date(assessment.assessmentDate).toLocaleDateString(
-                          "de-DE"
-                        )}
-                      </span>
-                    )}
-                    {assessment.assessedBy && (
-                      <span>
-                        {assessment.assessedBy.firstName}{" "}
-                        {assessment.assessedBy.lastName}
-                      </span>
-                    )}
-                    <span>
-                      {assessment._count.hazards} Gefährdungen
-                    </span>
-                    {assessment.assessedArea && (
-                      <span>{assessment.assessedArea}</span>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
-          ))
-        ) : (
-          <Card>
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <ShieldAlert className="h-12 w-12 text-muted-foreground mb-4" />
-              <p className="text-muted-foreground">
-                Noch keine Gefährdungsbeurteilungen vorhanden.
-              </p>
-              <Button asChild className="mt-4">
-                <Link href="/gefaehrdungsbeurteilungen/neu">
-                  Erste GBU erstellen
-                </Link>
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-      </div>
+      <AssessmentListFilter assessments={serializedAssessments} />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { Bell, CheckCheck, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -25,9 +26,27 @@ const typeLabels: Record<string, string> = {
 };
 
 export default function BenachrichtigungenPage() {
+  const router = useRouter();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
+
+  const referenceRoutes: Record<string, string> = {
+    inspection: "/begehungen",
+    document: "/dokumente",
+    risk_assessment: "/gefaehrdungsbeurteilungen",
+    substance: "/gefahrstoffe",
+    machine: "/maschinen",
+  };
+
+  const handleNavigate = async (n: Notification) => {
+    if (!n.isRead) {
+      handleMarkRead(n.id);
+    }
+    if (n.referenceType && n.referenceId && referenceRoutes[n.referenceType]) {
+      router.push(`${referenceRoutes[n.referenceType]}/${n.referenceId}`);
+    }
+  };
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -112,7 +131,10 @@ export default function BenachrichtigungenPage() {
           {notifications.map((n) => (
             <Card
               key={n.id}
-              className={n.isRead ? "opacity-60" : "border-primary/20"}
+              className={`${n.isRead ? "opacity-60" : "border-primary/20"} ${
+                n.referenceType && n.referenceId ? "cursor-pointer hover:bg-muted/50 transition-colors" : ""
+              }`}
+              onClick={() => handleNavigate(n)}
             >
               <CardContent className="flex items-start gap-3 py-4">
                 <Bell

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { logAudit } from "@/lib/audit";
+import { hasCompanyAccess } from "@/lib/access-control";
 
 // GET /api/substances/[id]
 export async function GET(
@@ -32,6 +34,10 @@ export async function GET(
         { error: "Gefahrstoff nicht gefunden" },
         { status: 404 }
       );
+    }
+
+    if (!hasCompanyAccess(session, substance.companyId)) {
+      return NextResponse.json({ error: "Zugriff verweigert" }, { status: 403 });
     }
 
     return NextResponse.json(substance);
@@ -111,6 +117,8 @@ export async function PUT(
       },
     });
 
+    logAudit({ userId: session.user.id, action: "update", entityType: "substance", entityId: params.id, details: { name: substance.tradeName } });
+
     return NextResponse.json(substance);
   } catch (error) {
     console.error("Error updating substance:", error);
@@ -136,6 +144,8 @@ export async function DELETE(
       where: { id: params.id },
       data: { status: "archived" },
     });
+
+    logAudit({ userId: session.user.id, action: "archive", entityType: "substance", entityId: params.id });
 
     return NextResponse.json({ success: true });
   } catch (error) {

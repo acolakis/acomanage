@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { logAudit } from "@/lib/audit";
+import { getCompanyFilter } from "@/lib/access-control";
+import { parsePaginationParams, paginatedResponse } from "@/lib/pagination";
 
 // GET /api/inspections - List all inspections
 export async function GET(request: NextRequest) {
@@ -14,9 +17,13 @@ export async function GET(request: NextRequest) {
   const companyId = searchParams.get("companyId");
   const status = searchParams.get("status");
 
-  const where: Record<string, unknown> = {};
+  const where: Record<string, unknown> = {
+    ...getCompanyFilter(session),
+  };
   if (companyId) where.companyId = companyId;
   if (status) where.status = status;
+
+  const pagination = parsePaginationParams(searchParams);
 
   try {
     const inspections = await prisma.inspection.findMany({
@@ -29,7 +36,13 @@ export async function GET(request: NextRequest) {
         },
       },
       orderBy: { inspectionDate: "desc" },
+      ...(pagination ? { skip: pagination.skip, take: pagination.limit } : {}),
     });
+
+    if (pagination) {
+      const total = await prisma.inspection.count({ where });
+      return NextResponse.json(paginatedResponse(inspections, total, pagination));
+    }
 
     return NextResponse.json(inspections);
   } catch (error) {
@@ -96,6 +109,8 @@ export async function POST(request: NextRequest) {
         company: { select: { id: true, name: true } },
       },
     });
+
+    logAudit({ userId: session.user.id, action: "create", entityType: "inspection", entityId: inspection.id, details: { number: inspectionNumber } });
 
     return NextResponse.json(inspection, { status: 201 });
   } catch (error) {

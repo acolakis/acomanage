@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { notifyCompanyUsers } from "@/lib/notifications";
+import { logAudit } from "@/lib/audit";
+import { hasCompanyAccess } from "@/lib/access-control";
 
 // GET /api/risk-assessments/[id] - Get a single risk assessment with all details
 export async function GET(
@@ -55,6 +58,10 @@ export async function GET(
         { error: "Gefährdungsbeurteilung nicht gefunden" },
         { status: 404 }
       );
+    }
+
+    if (!hasCompanyAccess(session, riskAssessment.companyId)) {
+      return NextResponse.json({ error: "Zugriff verweigert" }, { status: 403 });
     }
 
     return NextResponse.json(riskAssessment);
@@ -174,6 +181,19 @@ export async function PUT(
       },
     });
 
+    logAudit({ userId, action: "update", entityType: "risk_assessment", entityId: id, details: { title: riskAssessment.title, status } });
+
+    // Notify company users when GBU is activated
+    if (status === "active" && existing.status !== "active") {
+      notifyCompanyUsers(riskAssessment.company.id, {
+        type: "risk_assessment_updated",
+        title: "Gefährdungsbeurteilung freigegeben",
+        message: `Die GBU "${riskAssessment.title}" für ${riskAssessment.company.name} wurde freigegeben.`,
+        referenceType: "risk_assessment",
+        referenceId: riskAssessment.id,
+      }).catch(console.error);
+    }
+
     return NextResponse.json(riskAssessment);
   } catch (error) {
     console.error(
@@ -228,6 +248,8 @@ export async function DELETE(
       where: { id },
       data: { status: "archived" },
     });
+
+    logAudit({ userId: (session.user as { id: string }).id, action: "archive", entityType: "risk_assessment", entityId: id, details: { title: existing.title } });
 
     return NextResponse.json({
       message: "Gefährdungsbeurteilung erfolgreich gelöscht",

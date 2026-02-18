@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { notifyCompanyUsers } from "@/lib/notifications";
+import { logAudit } from "@/lib/audit";
 import { writeFile, mkdir, unlink } from "fs/promises";
 import path from "path";
 import { randomUUID } from "crypto";
@@ -152,7 +154,24 @@ export async function PUT(
           },
           data: { isCurrent: false },
         });
+
+        // Notify assigned companies about the update
+        const assignedCompanies = await prisma.companyDocument.findMany({
+          where: { documentId: params.id },
+          select: { companyId: true },
+        });
+        for (const cd of assignedCompanies) {
+          notifyCompanyUsers(cd.companyId, {
+            type: "document_updated",
+            title: "Dokument aktualisiert",
+            message: `Das Dokument "${document.title}" wurde auf Version ${newVersion} aktualisiert.`,
+            referenceType: "document",
+            referenceId: document.id,
+          }).catch(console.error);
+        }
       }
+
+      logAudit({ userId: session.user.id, action: "update", entityType: "document", entityId: params.id, details: { title: document.title, version: document.version } });
 
       return NextResponse.json(document);
     } else {
@@ -172,6 +191,8 @@ export async function PUT(
         data: updateData,
         include: { category: true },
       });
+
+      logAudit({ userId: session.user.id, action: "update", entityType: "document", entityId: params.id, details: { title: document.title } });
 
       return NextResponse.json(document);
     }
@@ -199,6 +220,8 @@ export async function DELETE(
       where: { id: params.id },
       data: { status: "archived" },
     });
+
+    logAudit({ userId: session.user.id, action: "archive", entityType: "document", entityId: params.id });
 
     return NextResponse.json({ success: true });
   } catch (error) {

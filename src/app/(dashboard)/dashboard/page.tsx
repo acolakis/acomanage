@@ -1,8 +1,10 @@
+import { Suspense } from "react";
 import {
   Building2,
   ClipboardCheck,
   FileText,
   AlertTriangle,
+  Loader2,
 } from "lucide-react";
 import {
   Card,
@@ -11,6 +13,9 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { prisma } from "@/lib/prisma";
+import { RecentActivity } from "@/components/dashboard/recent-activity";
+import { UpcomingDeadlines } from "@/components/dashboard/upcoming-deadlines";
+import { CompanyOverview } from "@/components/dashboard/company-overview";
 
 async function getDashboardStats() {
   try {
@@ -44,6 +49,24 @@ async function getDashboardStats() {
       openMeasuresCount: 0,
     };
   }
+}
+
+function DashboardCardSkeleton({ title }: { title: string }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          {title}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="h-32 flex items-center justify-center text-sm text-muted-foreground">
+          Wird geladen...
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 export default async function DashboardPage() {
@@ -105,6 +128,19 @@ export default async function DashboardPage() {
           </Card>
         ))}
       </div>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Suspense fallback={<DashboardCardSkeleton title="Letzte Aktivitäten" />}>
+          <RecentActivity />
+        </Suspense>
+        <Suspense fallback={<DashboardCardSkeleton title="Anstehende Fristen" />}>
+          <UpcomingDeadlines />
+        </Suspense>
+      </div>
+
+      <Suspense fallback={<DashboardCardSkeleton title="Betriebsübersicht" />}>
+        <CompanyOverview />
+      </Suspense>
     </div>
   );
 }

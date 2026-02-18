@@ -1,11 +1,10 @@
-import { Settings } from "lucide-react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+"use client";
+
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { GeneralSettings } from "@/components/settings/general-settings";
+import { SmtpSettings } from "@/components/settings/smtp-settings";
+import { AiSettings } from "@/components/settings/ai-settings";
+import { BackupSettings } from "@/components/settings/backup-settings";
 
 export default function EinstellungenPage() {
   return (
@@ -17,56 +16,30 @@ export default function EinstellungenPage() {
         </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Allgemein</CardTitle>
-            <CardDescription>Grundlegende Systemeinstellungen</CardDescription>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
-            <p>Firmenname, Logo und Kontaktdaten für PDF-Berichte.</p>
-          </CardContent>
-        </Card>
+      <Tabs defaultValue="general">
+        <TabsList>
+          <TabsTrigger value="general">Allgemein</TabsTrigger>
+          <TabsTrigger value="smtp">E-Mail</TabsTrigger>
+          <TabsTrigger value="ai">KI-Integration</TabsTrigger>
+          <TabsTrigger value="backup">Datensicherung</TabsTrigger>
+        </TabsList>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">E-Mail-Benachrichtigungen</CardTitle>
-            <CardDescription>SMTP-Konfiguration</CardDescription>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
-            <p>E-Mail-Server für automatische Benachrichtigungen konfigurieren.</p>
-          </CardContent>
-        </Card>
+        <TabsContent value="general" className="mt-4">
+          <GeneralSettings />
+        </TabsContent>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">KI-Integration</CardTitle>
-            <CardDescription>Claude API Einstellungen</CardDescription>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
-            <p>API-Schlüssel und Modellauswahl für die KI-Extraktion.</p>
-          </CardContent>
-        </Card>
+        <TabsContent value="smtp" className="mt-4">
+          <SmtpSettings />
+        </TabsContent>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Datensicherung</CardTitle>
-            <CardDescription>Backup und Export</CardDescription>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
-            <p>Datenbank-Backup und Export-Funktionen.</p>
-          </CardContent>
-        </Card>
-      </div>
+        <TabsContent value="ai" className="mt-4">
+          <AiSettings />
+        </TabsContent>
 
-      <Card>
-        <CardContent className="flex items-center gap-3 py-8 justify-center">
-          <Settings className="h-8 w-8 text-muted-foreground" />
-          <p className="text-muted-foreground">
-            Detaillierte Einstellungen werden in einer zukünftigen Version verfügbar sein.
-          </p>
-        </CardContent>
-      </Card>
+        <TabsContent value="backup" className="mt-4">
+          <BackupSettings />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

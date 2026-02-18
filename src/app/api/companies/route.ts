@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { logAudit } from "@/lib/audit";
+import { parsePaginationParams, paginatedResponse } from "@/lib/pagination";
 
 // GET /api/companies - List all companies with optional filters
 export async function GET(request: NextRequest) {
@@ -20,6 +22,11 @@ export async function GET(request: NextRequest) {
 
     const where: Record<string, unknown> = {};
 
+    // CLIENT users can only see their assigned companies
+    if (session.user.role === "CLIENT") {
+      where.id = { in: session.user.companyIds };
+    }
+
     if (search) {
       where.OR = [
         { name: { contains: search, mode: "insensitive" } },
@@ -33,6 +40,8 @@ export async function GET(request: NextRequest) {
       where.industryId = industryId;
     }
 
+    const pagination = parsePaginationParams(searchParams);
+
     const companies = await prisma.company.findMany({
       where,
       include: {
@@ -41,7 +50,13 @@ export async function GET(request: NextRequest) {
       orderBy: {
         name: "asc",
       },
+      ...(pagination ? { skip: pagination.skip, take: pagination.limit } : {}),
     });
+
+    if (pagination) {
+      const total = await prisma.company.count({ where });
+      return NextResponse.json(paginatedResponse(companies, total, pagination));
+    }
 
     return NextResponse.json(companies);
   } catch (error) {
@@ -100,6 +115,8 @@ export async function POST(request: NextRequest) {
         industry: true,
       },
     });
+
+    logAudit({ userId: session.user.id, action: "create", entityType: "company", entityId: company.id, details: { name: company.name } });
 
     return NextResponse.json(company, { status: 201 });
   } catch (error) {

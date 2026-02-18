@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { notifyCompanyUsers } from "@/lib/notifications";
 
 // POST /api/inspections/[id]/findings - Add a finding
 export async function POST(
@@ -72,6 +73,17 @@ export async function POST(
         where: { id: previousFindingId },
         data: { status: "IN_PROGRESS" },
       });
+    }
+
+    // Notify company users if finding has a deadline
+    if (deadline) {
+      notifyCompanyUsers(inspection.companyId, {
+        type: "measure_deadline",
+        title: "Neue Maßnahme mit Frist",
+        message: `Befund #${finding.findingNumber}: ${description.substring(0, 100)}${description.length > 100 ? "..." : ""}`,
+        referenceType: "inspection",
+        referenceId: params.id,
+      }).catch(console.error);
     }
 
     return NextResponse.json(finding, { status: 201 });

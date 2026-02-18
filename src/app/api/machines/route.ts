@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { logAudit } from "@/lib/audit";
+import { getCompanyFilter } from "@/lib/access-control";
+import { parsePaginationParams, paginatedResponse } from "@/lib/pagination";
 
 export async function GET(request: NextRequest) {
   try {
@@ -16,6 +19,7 @@ export async function GET(request: NextRequest) {
 
     const where: Record<string, unknown> = {
       status: { not: "archived" },
+      ...getCompanyFilter(session),
     };
 
     if (companyId) where.companyId = companyId;
@@ -28,13 +32,21 @@ export async function GET(request: NextRequest) {
       ];
     }
 
+    const pagination = parsePaginationParams(searchParams);
+
     const machines = await prisma.machine.findMany({
       where,
       include: {
         company: { select: { id: true, name: true } },
       },
       orderBy: { updatedAt: "desc" },
+      ...(pagination ? { skip: pagination.skip, take: pagination.limit } : {}),
     });
+
+    if (pagination) {
+      const total = await prisma.machine.count({ where });
+      return NextResponse.json(paginatedResponse(machines, total, pagination));
+    }
 
     return NextResponse.json(machines);
   } catch (error) {
@@ -73,6 +85,8 @@ export async function POST(request: NextRequest) {
         company: { select: { id: true, name: true } },
       },
     });
+
+    logAudit({ userId, action: "create", entityType: "machine", entityId: machine.id, details: { name: body.name } });
 
     return NextResponse.json(machine, { status: 201 });
   } catch (error) {

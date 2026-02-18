@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { logAudit } from "@/lib/audit";
+import { getCompanyFilter } from "@/lib/access-control";
+import { parsePaginationParams, paginatedResponse } from "@/lib/pagination";
 
 // GET /api/substances - List hazardous substances
 export async function GET(request: NextRequest) {
@@ -14,7 +17,10 @@ export async function GET(request: NextRequest) {
   const companyId = searchParams.get("companyId");
   const search = searchParams.get("search");
 
-  const where: Record<string, unknown> = { status: "active" };
+  const where: Record<string, unknown> = {
+    status: "active",
+    ...getCompanyFilter(session),
+  };
   if (companyId) where.companyId = companyId;
   if (search) {
     where.OR = [
@@ -24,6 +30,8 @@ export async function GET(request: NextRequest) {
     ];
   }
 
+  const pagination = parsePaginationParams(searchParams);
+
   try {
     const substances = await prisma.hazardousSubstance.findMany({
       where,
@@ -31,7 +39,13 @@ export async function GET(request: NextRequest) {
         company: { select: { id: true, name: true } },
       },
       orderBy: [{ companyId: "asc" }, { lfdNr: "asc" }],
+      ...(pagination ? { skip: pagination.skip, take: pagination.limit } : {}),
     });
+
+    if (pagination) {
+      const total = await prisma.hazardousSubstance.count({ where });
+      return NextResponse.json(paginatedResponse(substances, total, pagination));
+    }
 
     return NextResponse.json(substances);
   } catch (error) {
@@ -98,6 +112,8 @@ export async function POST(request: NextRequest) {
         company: { select: { id: true, name: true } },
       },
     });
+
+    logAudit({ userId: (session.user as { id: string }).id, action: "create", entityType: "substance", entityId: substance.id, details: { name: tradeName } });
 
     return NextResponse.json(substance, { status: 201 });
   } catch (error) {

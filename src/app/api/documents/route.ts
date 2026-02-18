@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { logAudit } from "@/lib/audit";
+import { parsePaginationParams, paginatedResponse } from "@/lib/pagination";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { randomUUID } from "crypto";
@@ -40,6 +42,8 @@ export async function GET(request: NextRequest) {
     where.status = status;
   }
 
+  const pagination = parsePaginationParams(searchParams);
+
   try {
     const documents = await prisma.document.findMany({
       where,
@@ -53,7 +57,13 @@ export async function GET(request: NextRequest) {
         },
       },
       orderBy: { updatedAt: "desc" },
+      ...(pagination ? { skip: pagination.skip, take: pagination.limit } : {}),
     });
+
+    if (pagination) {
+      const total = await prisma.document.count({ where });
+      return NextResponse.json(paginatedResponse(documents, total, pagination));
+    }
 
     return NextResponse.json(documents);
   } catch (error) {
@@ -143,6 +153,8 @@ export async function POST(request: NextRequest) {
         },
       },
     });
+
+    logAudit({ userId: session.user.id, action: "create", entityType: "document", entityId: document.id, details: { title } });
 
     return NextResponse.json(document, { status: 201 });
   } catch (error) {

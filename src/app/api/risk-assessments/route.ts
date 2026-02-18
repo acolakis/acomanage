@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { logAudit } from "@/lib/audit";
+import { getCompanyFilter } from "@/lib/access-control";
+import { parsePaginationParams, paginatedResponse } from "@/lib/pagination";
 
 // GET /api/risk-assessments - List risk assessments with optional filters
 export async function GET(request: NextRequest) {
@@ -22,6 +25,7 @@ export async function GET(request: NextRequest) {
 
     const where: Record<string, unknown> = {
       status: { not: "archived" },
+      ...getCompanyFilter(session),
     };
 
     if (companyId) {
@@ -43,6 +47,8 @@ export async function GET(request: NextRequest) {
         { legalBasis: { contains: search, mode: "insensitive" } },
       ];
     }
+
+    const pagination = parsePaginationParams(searchParams);
 
     const riskAssessments = await prisma.riskAssessment.findMany({
       where,
@@ -69,7 +75,13 @@ export async function GET(request: NextRequest) {
       orderBy: {
         updatedAt: "desc",
       },
+      ...(pagination ? { skip: pagination.skip, take: pagination.limit } : {}),
     });
+
+    if (pagination) {
+      const total = await prisma.riskAssessment.count({ where });
+      return NextResponse.json(paginatedResponse(riskAssessments, total, pagination));
+    }
 
     return NextResponse.json(riskAssessments);
   } catch (error) {
@@ -167,6 +179,8 @@ export async function POST(request: NextRequest) {
         },
       },
     });
+
+    logAudit({ userId, action: "create", entityType: "risk_assessment", entityId: riskAssessment.id, details: { title } });
 
     return NextResponse.json(riskAssessment, { status: 201 });
   } catch (error) {

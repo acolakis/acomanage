@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Loader2, Trash2, Cog } from "lucide-react";
+import { ArrowLeft, Loader2, Trash2, Cog, Pencil, FileText, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -12,6 +12,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { ManualExtractionDialog } from "@/components/machines/manual-extraction-dialog";
 
 interface MachineData {
   id: string;
@@ -26,6 +27,42 @@ interface MachineData {
   company: { id: string; name: string };
   createdBy: { firstName: string; lastName: string } | null;
   createdAt: string;
+  manualExtractions?: ManualExtractionData[];
+}
+
+interface ManualExtractionData {
+  id: string;
+  extractionStatus: string;
+  confidenceScore: number | null;
+  scope: { intendedUse: string; limitations: string } | null;
+  hazards: {
+    mechanicalHazards: string[];
+    electricalHazards: string[];
+    thermalHazards: string[];
+    noiseHazards: string[];
+    otherHazards: string[];
+  } | null;
+  protectiveMeasures: {
+    ppe: string[];
+    safetyDevices: string;
+    warnings: string[];
+    operatingInstructions: string[];
+  } | null;
+  malfunctions: {
+    commonIssues: string[];
+    emergencyProcedures: string;
+    emergencyStop: string;
+  } | null;
+  firstAid: {
+    generalMeasures: string;
+    specificInstructions: string[];
+  } | null;
+  maintenance: {
+    dailyChecks: string[];
+    periodicMaintenance: string[];
+    maintenanceIntervals: string;
+  } | null;
+  createdAt: string;
 }
 
 export default function MaschineDetailPage() {
@@ -33,6 +70,7 @@ export default function MaschineDetailPage() {
   const router = useRouter();
   const [machine, setMachine] = useState<MachineData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [extractionOpen, setExtractionOpen] = useState(false);
 
   const fetchMachine = useCallback(async () => {
     try {
@@ -91,10 +129,18 @@ export default function MaschineDetailPage() {
             {machine.model && <Badge variant="outline">{machine.model}</Badge>}
           </div>
         </div>
-        <Button variant="destructive" size="sm" onClick={handleDelete}>
-          <Trash2 className="mr-2 h-4 w-4" />
-          Löschen
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" asChild>
+            <Link href={`/maschinen/${machine.id}/bearbeiten`}>
+              <Pencil className="mr-2 h-4 w-4" />
+              Bearbeiten
+            </Link>
+          </Button>
+          <Button variant="destructive" size="sm" onClick={handleDelete}>
+            <Trash2 className="mr-2 h-4 w-4" />
+            Löschen
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -152,6 +198,119 @@ export default function MaschineDetailPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Betriebsanweisung / KI-Extraktion */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <BookOpen className="h-5 w-5" />
+              Betriebsanweisung
+            </CardTitle>
+            <Button size="sm" onClick={() => setExtractionOpen(true)}>
+              <FileText className="mr-2 h-4 w-4" />
+              Handbuch analysieren
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {machine.manualExtractions && machine.manualExtractions.length > 0 ? (
+            <div className="space-y-4">
+              {machine.manualExtractions.map((ext) => (
+                <div key={ext.id} className="space-y-3">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Badge variant="outline">
+                      {ext.confidenceScore ? `${Math.round(ext.confidenceScore * 100)}% Konfidenz` : "Extrahiert"}
+                    </Badge>
+                    <span>vom {new Date(ext.createdAt).toLocaleDateString("de-DE")}</span>
+                  </div>
+
+                  {ext.scope && (
+                    <div>
+                      <h4 className="text-sm font-medium mb-1">Anwendungsbereich</h4>
+                      <p className="text-sm text-muted-foreground">{ext.scope.intendedUse || "—"}</p>
+                      {ext.scope.limitations && (
+                        <p className="text-sm text-muted-foreground mt-1">
+                          <span className="font-medium">Einschränkungen:</span> {ext.scope.limitations}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {ext.hazards && (
+                    <div>
+                      <h4 className="text-sm font-medium mb-1">Gefährdungen</h4>
+                      <div className="flex flex-wrap gap-1">
+                        {[
+                          ...( ext.hazards.mechanicalHazards || []),
+                          ...(ext.hazards.electricalHazards || []),
+                          ...(ext.hazards.thermalHazards || []),
+                          ...(ext.hazards.noiseHazards || []),
+                          ...(ext.hazards.otherHazards || []),
+                        ].map((h, i) => (
+                          <Badge key={i} variant="secondary" className="text-xs">
+                            {h}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {ext.protectiveMeasures?.ppe && ext.protectiveMeasures.ppe.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-medium mb-1">PSA (Persönliche Schutzausrüstung)</h4>
+                      <div className="flex flex-wrap gap-1">
+                        {ext.protectiveMeasures.ppe.map((p, i) => (
+                          <Badge key={i} variant="outline" className="text-xs">
+                            {p}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {ext.maintenance && (
+                    <div>
+                      <h4 className="text-sm font-medium mb-1">Wartung</h4>
+                      {ext.maintenance.dailyChecks?.length > 0 && (
+                        <div className="mb-1">
+                          <span className="text-xs font-medium">Tägliche Prüfungen:</span>
+                          <ul className="text-sm text-muted-foreground list-disc list-inside">
+                            {ext.maintenance.dailyChecks.map((c, i) => (
+                              <li key={i}>{c}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {ext.maintenance.periodicMaintenance?.length > 0 && (
+                        <div>
+                          <span className="text-xs font-medium">Periodische Wartung:</span>
+                          <ul className="text-sm text-muted-foreground list-disc list-inside">
+                            {ext.maintenance.periodicMaintenance.map((m, i) => (
+                              <li key={i}>{m}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Noch keine Betriebsanweisung vorhanden. Laden Sie ein Maschinenhandbuch hoch, um automatisch relevante Informationen zu extrahieren.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      <ManualExtractionDialog
+        machineId={machine.id}
+        open={extractionOpen}
+        onOpenChange={setExtractionOpen}
+        onComplete={() => fetchMachine()}
+      />
     </div>
   );
 }

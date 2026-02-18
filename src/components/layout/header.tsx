@@ -29,15 +29,19 @@ export function Header() {
   const { data: session } = useSession();
   const pathname = usePathname();
   const [unreadCount, setUnreadCount] = useState(0);
+  const [recentNotifications, setRecentNotifications] = useState<
+    { id: string; title: string; message: string | null; createdAt: string; isRead: boolean }[]
+  >([]);
 
   const isPortal = pathname.startsWith("/portal");
 
   const fetchUnread = useCallback(async () => {
     try {
-      const res = await fetch("/api/notifications?unread=true&limit=1");
+      const res = await fetch("/api/notifications?limit=5");
       if (res.ok) {
         const data = await res.json();
         setUnreadCount(data.unreadCount ?? 0);
+        setRecentNotifications(data.notifications?.slice(0, 5) ?? []);
       }
     } catch {
       // ignore
@@ -99,17 +103,50 @@ export function Header() {
       {/* Spacer */}
       <div className="flex-1" />
 
-      {/* Notification bell */}
-      <Button variant="ghost" size="icon" asChild className="relative">
-        <Link href={notificationsHref}>
-          <Bell className="h-5 w-5" />
-          {unreadCount > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground">
-              {unreadCount > 9 ? "9+" : unreadCount}
-            </span>
+      {/* Notification bell with dropdown */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon" className="relative">
+            <Bell className="h-5 w-5" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-80">
+          <DropdownMenuLabel>Benachrichtigungen</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          {recentNotifications.length > 0 ? (
+            recentNotifications.map((n) => (
+              <DropdownMenuItem key={n.id} className="flex flex-col items-start gap-0.5 py-2">
+                <p className={`text-sm ${n.isRead ? "text-muted-foreground" : "font-medium"}`}>
+                  {n.title}
+                </p>
+                {n.message && (
+                  <p className="text-xs text-muted-foreground truncate w-full">
+                    {n.message}
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  {new Date(n.createdAt).toLocaleDateString("de-DE")}
+                </p>
+              </DropdownMenuItem>
+            ))
+          ) : (
+            <div className="px-2 py-4 text-center text-sm text-muted-foreground">
+              Keine Benachrichtigungen
+            </div>
           )}
-        </Link>
-      </Button>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem asChild>
+            <Link href={notificationsHref} className="justify-center text-sm font-medium">
+              Alle anzeigen
+            </Link>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       {/* User menu */}
       <DropdownMenu>

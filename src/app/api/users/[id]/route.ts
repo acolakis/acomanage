@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import { logAudit } from "@/lib/audit";
 
 export async function GET(
   _req: NextRequest,
@@ -90,6 +91,8 @@ export async function PUT(
       },
     });
 
+    logAudit({ userId: session.user.id, action: "update", entityType: "user", entityId: params.id, details: { email: user.email } });
+
     return NextResponse.json(user);
   } catch (error) {
     console.error("Error updating user:", error);
@@ -122,6 +125,8 @@ export async function DELETE(
       where: { id: params.id },
       data: { isActive: false },
     });
+
+    logAudit({ userId: session.user.id, action: "archive", entityType: "user", entityId: params.id });
 
     return NextResponse.json({ success: true });
   } catch (error) {

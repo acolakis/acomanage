@@ -1,5 +1,6 @@
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { ShieldAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -87,7 +88,8 @@ export default async function PortalGbuPage() {
             ).length;
 
             return (
-              <Card key={a.id}>
+              <Link key={a.id} href={`/portal/gefaehrdungsbeurteilungen/${a.id}`} className="block">
+              <Card className="hover:bg-accent/50 transition-colors cursor-pointer">
                 <CardHeader className="pb-2">
                   <div className="flex items-start justify-between">
                     <div>
@@ -143,6 +145,7 @@ export default async function PortalGbuPage() {
                   )}
                 </CardContent>
               </Card>
+              </Link>
             );
           })}
         </div>
