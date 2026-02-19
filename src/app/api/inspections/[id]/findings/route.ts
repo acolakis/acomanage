@@ -67,6 +67,25 @@ export async function POST(
       },
     });
 
+    // Auto-set ItemCheck to MANGEL when finding is linked to a template item
+    if (templateItemId) {
+      await prisma.inspectionItemCheck.upsert({
+        where: {
+          inspectionId_templateItemId: {
+            inspectionId: params.id,
+            templateItemId,
+          },
+        },
+        update: { status: "MANGEL", checkedAt: new Date() },
+        create: {
+          inspectionId: params.id,
+          templateItemId,
+          status: "MANGEL",
+          checkedAt: new Date(),
+        },
+      });
+    }
+
     // If this finding references a previous one, mark the old one as in progress
     if (previousFindingId) {
       await prisma.inspectionFinding.update({

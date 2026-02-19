@@ -5,6 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { notifyCompanyUsers } from "@/lib/notifications";
 import { logAudit } from "@/lib/audit";
 import { hasCompanyAccess } from "@/lib/access-control";
+import * as fs from "fs";
+import * as path from "path";
 
 // GET /api/inspections/[id] - Get inspection with all details
 export async function GET(
@@ -27,7 +29,20 @@ export async function GET(
             sections: {
               orderBy: { sortOrder: "asc" },
               include: {
-                items: { orderBy: { sortOrder: "asc" } },
+                items: {
+                  orderBy: { sortOrder: "asc" },
+                  select: {
+                    id: true,
+                    sectionId: true,
+                    itemKey: true,
+                    label: true,
+                    description: true,
+                    legalReference: true,
+                    suggestedMeasure: true,
+                    defaultRiskLevel: true,
+                    sortOrder: true,
+                  },
+                },
               },
             },
           },
@@ -41,6 +56,17 @@ export async function GET(
           },
         },
         photos: { orderBy: { sortOrder: "asc" } },
+        itemChecks: {
+          select: {
+            id: true,
+            templateItemId: true,
+            status: true,
+            note: true,
+            checkedAt: true,
+            lastTestDate: true,
+            nextTestDate: true,
+          },
+        },
         previousInspection: {
           select: {
             id: true,
@@ -155,11 +181,32 @@ export async function DELETE(
       );
     }
 
-    if (inspection.status !== "DRAFT") {
+    if (inspection.status !== "DRAFT" && inspection.status !== "IN_PROGRESS") {
       return NextResponse.json(
-        { error: "Nur Entwürfe können gelöscht werden" },
+        { error: "Nur Entwürfe und laufende Begehungen können gelöscht werden" },
         { status: 400 }
       );
+    }
+
+    if (!hasCompanyAccess(session, inspection.companyId)) {
+      return NextResponse.json({ error: "Zugriff verweigert" }, { status: 403 });
+    }
+
+    // Delete photo files from filesystem
+    const photos = await prisma.inspectionPhoto.findMany({
+      where: { inspectionId: params.id },
+      select: { filePath: true },
+    });
+    for (const photo of photos) {
+      const filePath = path.join(process.cwd(), photo.filePath);
+      if (fs.existsSync(filePath)) {
+        try { fs.unlinkSync(filePath); } catch { /* ignore */ }
+      }
+    }
+    // Try to remove directory
+    const photoDir = path.join(process.cwd(), "uploads", "inspections", params.id);
+    if (fs.existsSync(photoDir)) {
+      try { fs.rmdirSync(photoDir); } catch { /* ignore */ }
     }
 
     await prisma.inspection.delete({ where: { id: params.id } });

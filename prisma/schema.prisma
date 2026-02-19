@@ -294,17 +294,20 @@ model InspectionTemplateSection {
 }
 
 model InspectionTemplateItem {
-  id             String  @id @default(uuid())
-  sectionId      String  @map("section_id")
-  itemKey        String  @map("item_key")
-  label          String
-  description    String?
-  legalReference String? @map("legal_reference")
-  sortOrder      Int     @map("sort_order")
-  createdAt      DateTime @default(now()) @map("created_at")
+  id               String     @id @default(uuid())
+  sectionId        String     @map("section_id")
+  itemKey          String     @map("item_key")
+  label            String
+  description      String?
+  legalReference   String?    @map("legal_reference")
+  suggestedMeasure String?    @map("suggested_measure")
+  defaultRiskLevel RiskLevel? @map("default_risk_level")
+  sortOrder        Int        @map("sort_order")
+  createdAt        DateTime   @default(now()) @map("created_at")
 
-  section  InspectionTemplateSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
-  findings InspectionFinding[]
+  section    InspectionTemplateSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  findings   InspectionFinding[]
+  itemChecks InspectionItemCheck[]
 
   @@map("inspection_template_items")
 }
@@ -347,6 +350,7 @@ model Inspection {
   inspector           User                @relation("InspectionInspector", fields: [inspectorId], references: [id])
   findings            InspectionFinding[]
   photos              InspectionPhoto[]
+  itemChecks          InspectionItemCheck[]
 
   @@map("inspections")
 }
@@ -407,6 +411,31 @@ model InspectionPhoto {
   finding    InspectionFinding? @relation(fields: [findingId], references: [id], onDelete: SetNull)
 
   @@map("inspection_photos")
+}
+
+enum ItemCheckStatus {
+  UNCHECKED
+  IO
+  MANGEL
+  NICHT_RELEVANT
+}
+
+model InspectionItemCheck {
+  id             String          @id @default(uuid())
+  inspectionId   String          @map("inspection_id")
+  templateItemId String          @map("template_item_id")
+  status         ItemCheckStatus @default(UNCHECKED)
+  note           String?
+  checkedAt      DateTime?       @map("checked_at")
+  lastTestDate   DateTime?       @map("last_test_date")
+  nextTestDate   DateTime?       @map("next_test_date")
+  createdAt      DateTime        @default(now()) @map("created_at")
+
+  inspection   Inspection             @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  templateItem InspectionTemplateItem @relation(fields: [templateItemId], references: [id])
+
+  @@unique([inspectionId, templateItemId])
+  @@map("inspection_item_checks")
 }
 
 // ============================================================

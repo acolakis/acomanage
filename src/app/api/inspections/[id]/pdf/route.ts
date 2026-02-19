@@ -39,6 +39,9 @@ export async function GET(
           },
         },
         photos: { orderBy: { sortOrder: "asc" } },
+        itemChecks: {
+          select: { templateItemId: true, status: true, lastTestDate: true, nextTestDate: true },
+        },
       },
     });
 
