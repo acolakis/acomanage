@@ -20,6 +20,7 @@ export async function GET(
       include: {
         company: { select: { id: true, name: true } },
         createdBy: { select: { firstName: true, lastName: true } },
+        baDocument: { select: { id: true, title: true, filePath: true } },
         extractions: {
           where: { extractionStatus: "completed" },
           orderBy: { createdAt: "desc" },

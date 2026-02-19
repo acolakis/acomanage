@@ -176,7 +176,7 @@ export function CompanyForm({ initialData }: CompanyFormProps) {
       if (isEditMode) {
         router.push(`/betriebe/${initialData.id}`);
       } else {
-        router.push(`/betriebe/${company.id}`);
+        router.push(`/betriebe/${company.id}/vorlagen`);
       }
       router.refresh();
     } catch (error) {

@@ -6,12 +6,14 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { prisma } from "@/lib/prisma";
+import { getSelectedCompanyFilter } from "@/lib/company-filter";
 import { MachineListFilter } from "@/components/machines/machine-list-filter";
 
 async function getMachines() {
   try {
+    const companyFilter = getSelectedCompanyFilter();
     return await prisma.machine.findMany({
-      where: { status: { not: "archived" } },
+      where: { status: { not: "archived" }, ...companyFilter },
       include: {
         company: { select: { id: true, name: true } },
       },

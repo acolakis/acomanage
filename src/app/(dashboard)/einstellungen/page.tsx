@@ -5,6 +5,7 @@ import { GeneralSettings } from "@/components/settings/general-settings";
 import { SmtpSettings } from "@/components/settings/smtp-settings";
 import { AiSettings } from "@/components/settings/ai-settings";
 import { BackupSettings } from "@/components/settings/backup-settings";
+import { TemplateSettings } from "@/components/settings/template-settings";
 
 export default function EinstellungenPage() {
   return (
@@ -21,6 +22,7 @@ export default function EinstellungenPage() {
           <TabsTrigger value="general">Allgemein</TabsTrigger>
           <TabsTrigger value="smtp">E-Mail</TabsTrigger>
           <TabsTrigger value="ai">KI-Integration</TabsTrigger>
+          <TabsTrigger value="templates">Vorlagen</TabsTrigger>
           <TabsTrigger value="backup">Datensicherung</TabsTrigger>
         </TabsList>
 
@@ -34,6 +36,10 @@ export default function EinstellungenPage() {
 
         <TabsContent value="ai" className="mt-4">
           <AiSettings />
+        </TabsContent>
+
+        <TabsContent value="templates" className="mt-4">
+          <TemplateSettings />
         </TabsContent>
 
         <TabsContent value="backup" className="mt-4">

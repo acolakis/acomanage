@@ -13,25 +13,36 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { prisma } from "@/lib/prisma";
+import { getSelectedCompanyId } from "@/lib/company-filter";
 import { RecentActivity } from "@/components/dashboard/recent-activity";
 import { UpcomingDeadlines } from "@/components/dashboard/upcoming-deadlines";
 import { CompanyOverview } from "@/components/dashboard/company-overview";
 
 async function getDashboardStats() {
   try {
+    const selectedCompanyId = getSelectedCompanyId();
+    const companyFilter = selectedCompanyId ? { companyId: selectedCompanyId } : {};
+
     const [
       companiesCount,
       openInspectionsCount,
       documentsCount,
       openMeasuresCount,
     ] = await Promise.all([
-      prisma.company.count({ where: { isActive: true } }),
-      prisma.inspection.count({
-        where: { status: { in: ["DRAFT", "IN_PROGRESS"] } },
+      prisma.company.count({
+        where: { isActive: true, ...(selectedCompanyId ? { id: selectedCompanyId } : {}) },
       }),
-      prisma.document.count({ where: { status: "active" } }),
+      prisma.inspection.count({
+        where: { status: { in: ["DRAFT", "IN_PROGRESS"] }, ...companyFilter },
+      }),
+      selectedCompanyId
+        ? prisma.companyDocument.count({ where: { companyId: selectedCompanyId } })
+        : prisma.document.count({ where: { status: "active" } }),
       prisma.inspectionFinding.count({
-        where: { status: { in: ["OPEN", "IN_PROGRESS", "OVERDUE"] } },
+        where: {
+          status: { in: ["OPEN", "IN_PROGRESS", "OVERDUE"] },
+          ...(selectedCompanyId ? { inspection: { companyId: selectedCompanyId } } : {}),
+        },
       }),
     ]);
 

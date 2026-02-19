@@ -12,7 +12,9 @@ import {
   AlertTriangle,
   Shield,
   FileDown,
+  FileText,
   Sparkles,
+  Download,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -23,6 +25,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { AdoptBaDialog } from "@/components/substances/adopt-ba-dialog";
 
 interface SubstanceData {
   id: string;
@@ -48,6 +51,7 @@ interface SubstanceData {
   pStatements: string[];
   signalWord: string | null;
   wgk: string | null;
+  gbaDocument: { id: string; title: string; filePath: string | null } | null;
   company: { id: string; name: string };
 }
 
@@ -70,6 +74,8 @@ export default function GefahrstoffDetailPage() {
   const [loading, setLoading] = useState(true);
   const [extracting, setExtracting] = useState(false);
   const [gbaLoading, setGbaLoading] = useState(false);
+  const [adoptOpen, setAdoptOpen] = useState(false);
+  const [baDownloading, setBaDownloading] = useState(false);
 
   const fetchSubstance = useCallback(async () => {
     try {
@@ -128,6 +134,31 @@ export default function GefahrstoffDetailPage() {
       alert("Fehler beim Generieren der Betriebsanweisung");
     } finally {
       setGbaLoading(false);
+    }
+  };
+
+  const handleDownloadBa = async () => {
+    if (!substance?.gbaDocument || !substance?.company) return;
+    setBaDownloading(true);
+    try {
+      const res = await fetch(
+        `/api/companies/${substance.company.id}/templates/${substance.gbaDocument.id}/download`
+      );
+      if (!res.ok) throw new Error("Fehler");
+      const blob = await res.blob();
+      const disposition = res.headers.get("Content-Disposition") || "";
+      const match = disposition.match(/filename="?(.+?)"?$/);
+      const filename = match ? decodeURIComponent(match[1]) : `BA_${substance.tradeName}.docx`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert("Fehler beim Herunterladen der Betriebsanweisung");
+    } finally {
+      setBaDownloading(false);
     }
   };
 
@@ -405,6 +436,68 @@ export default function GefahrstoffDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Betriebsanweisung (BA) */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <FileText className="h-5 w-5" />
+            Betriebsanweisung (.docx)
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {substance.gbaDocument ? (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">{substance.gbaDocument.title}</p>
+                <p className="text-xs text-muted-foreground">
+                  Wird beim Download mit den Firmendaten personalisiert
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDownloadBa}
+                  disabled={baDownloading}
+                >
+                  {baDownloading ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Download className="mr-2 h-4 w-4" />
+                  )}
+                  Download
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setAdoptOpen(true)}
+                >
+                  Ändern
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-4">
+              <p className="text-sm text-muted-foreground mb-3">
+                Keine Betriebsanweisung (.docx) zugewiesen.
+              </p>
+              <Button variant="outline" onClick={() => setAdoptOpen(true)}>
+                <FileText className="mr-2 h-4 w-4" />
+                BA übernehmen
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <AdoptBaDialog
+        substanceId={substance.id}
+        substanceName={substance.tradeName}
+        open={adoptOpen}
+        onOpenChange={setAdoptOpen}
+        onComplete={() => fetchSubstance()}
+      />
     </div>
   );
 }

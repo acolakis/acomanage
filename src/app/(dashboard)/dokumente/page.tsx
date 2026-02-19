@@ -1,10 +1,17 @@
 import { prisma } from "@/lib/prisma";
+import { getSelectedCompanyId } from "@/lib/company-filter";
 import { DocumentList } from "@/components/documents/document-list";
 
 async function getDocuments() {
   try {
+    const selectedCompanyId = getSelectedCompanyId();
     const documents = await prisma.document.findMany({
-      where: { status: { not: "archived" } },
+      where: {
+        status: { not: "archived" },
+        ...(selectedCompanyId
+          ? { companyDocuments: { some: { companyId: selectedCompanyId } } }
+          : {}),
+      },
       include: {
         category: true,
         createdBy: {

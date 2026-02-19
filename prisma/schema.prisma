@@ -216,9 +216,9 @@ model Document {
   companyDocuments CompanyDocument[]
   propagations     DocumentPropagation[]
   sdsSubstance     HazardousSubstance?  @relation("SdsDocument")
-  gbaSubstance     HazardousSubstance?  @relation("GbaDocument")
+  gbaSubstances    HazardousSubstance[] @relation("GbaDocument")
   manualMachine    Machine?             @relation("ManualDocument")
-  baMachine        Machine?             @relation("BaDocument")
+  baMachines       Machine[]            @relation("BaDocument")
 
   @@map("documents")
 }
@@ -440,7 +440,7 @@ model HazardousSubstance {
   wgk              String?
   status           String   @default("active")
   sdsDocumentId    String?  @unique @map("sds_document_id")
-  gbaDocumentId    String?  @unique @map("gba_document_id")
+  gbaDocumentId    String?  @map("gba_document_id")
   createdById      String?  @map("created_by")
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
@@ -494,7 +494,7 @@ model Machine {
   yearOfManufacture Int?     @map("year_of_manufacture")
   status            String   @default("active")
   manualDocumentId  String?  @unique @map("manual_document_id")
-  baDocumentId      String?  @unique @map("ba_document_id")
+  baDocumentId      String?  @map("ba_document_id")
   createdById       String?  @map("created_by")
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")

@@ -6,11 +6,14 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { prisma } from "@/lib/prisma";
+import { getSelectedCompanyFilter } from "@/lib/company-filter";
 import { InspectionListFilter } from "@/components/inspections/inspection-list-filter";
 
 async function getInspections() {
   try {
+    const companyFilter = getSelectedCompanyFilter();
     return await prisma.inspection.findMany({
+      where: { ...companyFilter },
       include: {
         company: { select: { id: true, name: true, city: true } },
         inspector: { select: { firstName: true, lastName: true } },
@@ -26,8 +29,12 @@ async function getInspections() {
 export default async function BegehungenPage() {
   const inspections = await getInspections();
 
+  const companyFilter = getSelectedCompanyFilter();
   const openFindings = await prisma.inspectionFinding.count({
-    where: { status: { in: ["OPEN", "OVERDUE"] } },
+    where: {
+      status: { in: ["OPEN", "OVERDUE"] },
+      ...(Object.keys(companyFilter).length > 0 ? { inspection: companyFilter } : {}),
+    },
   }).catch(() => 0);
 
   const serializedInspections = JSON.parse(JSON.stringify(inspections));

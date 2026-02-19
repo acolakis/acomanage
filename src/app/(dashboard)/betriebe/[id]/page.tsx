@@ -13,6 +13,7 @@ import {
   ClipboardCheck,
   FlaskConical,
   Cog,
+  Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -41,6 +42,18 @@ async function getCompany(id: string) {
             select: { firstName: true, lastName: true, email: true },
           },
         },
+      },
+      documents: {
+        include: {
+          document: {
+            include: {
+              category: {
+                select: { code: true, name: true, parentGroup: true },
+              },
+            },
+          },
+        },
+        orderBy: { document: { category: { sortOrder: "asc" } } },
       },
       _count: {
         select: {
@@ -106,12 +119,20 @@ export default async function BetriebDetailPage({
             {company.legalForm && <span>{company.legalForm}</span>}
           </div>
         </div>
-        <Button asChild>
-          <Link href={`/betriebe/${company.id}/bearbeiten`}>
-            <Pencil className="mr-2 h-4 w-4" />
-            Bearbeiten
-          </Link>
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" asChild>
+            <Link href={`/betriebe/${company.id}/vorlagen`}>
+              <FileText className="mr-2 h-4 w-4" />
+              Vorlagen verwalten
+            </Link>
+          </Button>
+          <Button asChild>
+            <Link href={`/betriebe/${company.id}/bearbeiten`}>
+              <Pencil className="mr-2 h-4 w-4" />
+              Bearbeiten
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -292,6 +313,84 @@ export default async function BetriebDetailPage({
           </CardContent>
         </Card>
       </div>
+
+      {/* Zugewiesene Vorlagen */}
+      {company.documents.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Zugewiesene Vorlagen
+            </CardTitle>
+            <CardDescription>
+              {company.documents.length} Vorlagen diesem Betrieb zugeordnet
+              {" \u2014 "}
+              .docx-Dateien werden mit den Firmendaten personalisiert
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {Object.entries(
+                company.documents.reduce<
+                  Record<
+                    string,
+                    {
+                      code: string;
+                      name: string;
+                      docs: typeof company.documents;
+                    }
+                  >
+                >((acc, cd) => {
+                  const group = cd.document.category?.parentGroup || "Sonstige";
+                  if (!acc[group]) {
+                    acc[group] = {
+                      code: cd.document.category?.code || "",
+                      name: cd.document.category?.name || "",
+                      docs: [],
+                    };
+                  }
+                  acc[group].docs.push(cd);
+                  return acc;
+                }, {})
+              ).map(([group, { docs }]) => (
+                <div key={group}>
+                  <p className="text-sm font-medium mb-2">Gruppe {group}</p>
+                  <div className="space-y-1">
+                    {docs.map((cd) => (
+                      <div
+                        key={cd.id}
+                        className="flex items-center justify-between py-1.5 px-2 rounded hover:bg-muted/50"
+                      >
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <Badge variant="secondary" className="font-mono shrink-0 text-xs">
+                            {cd.document.category?.code}
+                          </Badge>
+                          <span className="text-sm truncate">
+                            {cd.document.title}
+                          </span>
+                          {cd.document.fileType && (
+                            <Badge variant="outline" className="text-xs shrink-0">
+                              {cd.document.fileType.toUpperCase()}
+                            </Badge>
+                          )}
+                        </div>
+                        <Button variant="ghost" size="sm" asChild className="shrink-0">
+                          <a
+                            href={`/api/companies/${company.id}/templates/${cd.document.id}/download`}
+                            download
+                          >
+                            <Download className="h-4 w-4" />
+                          </a>
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Dokumentkategorien */}
       {company.categories.length > 0 && (

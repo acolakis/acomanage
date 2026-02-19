@@ -30,6 +30,22 @@ async function getDocument(id: string) {
           },
         },
       },
+      gbaSubstances: {
+        where: { status: "active" },
+        select: {
+          id: true,
+          tradeName: true,
+          company: { select: { id: true, name: true } },
+        },
+      },
+      baMachines: {
+        where: { status: { not: "archived" } },
+        select: {
+          id: true,
+          name: true,
+          company: { select: { id: true, name: true } },
+        },
+      },
     },
   });
   return document;

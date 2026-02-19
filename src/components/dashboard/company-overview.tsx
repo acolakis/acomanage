@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getSelectedCompanyId } from "@/lib/company-filter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Building2 } from "lucide-react";
@@ -14,8 +15,12 @@ interface CompanyStats {
 }
 
 async function getCompanyStats(): Promise<CompanyStats[]> {
+  const selectedCompanyId = getSelectedCompanyId();
   const companies = await prisma.company.findMany({
-    where: { isActive: true },
+    where: {
+      isActive: true,
+      ...(selectedCompanyId ? { id: selectedCompanyId } : {}),
+    },
     orderBy: { name: "asc" },
     select: {
       id: true,

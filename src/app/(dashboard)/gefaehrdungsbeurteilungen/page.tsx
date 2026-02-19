@@ -6,12 +6,17 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { prisma } from "@/lib/prisma";
+import { getSelectedCompanyId } from "@/lib/company-filter";
 import { AssessmentListFilter } from "@/components/risk-assessments/assessment-list-filter";
 
 async function getRiskAssessments() {
   try {
+    const selectedCompanyId = getSelectedCompanyId();
     return await prisma.riskAssessment.findMany({
-      where: { status: { not: "archived" } },
+      where: {
+        status: { not: "archived" },
+        ...(selectedCompanyId ? { companyId: selectedCompanyId } : {}),
+      },
       include: {
         company: { select: { id: true, name: true } },
         assessedBy: { select: { firstName: true, lastName: true } },
@@ -27,11 +32,16 @@ async function getRiskAssessments() {
 export default async function GefaehrdungsbeurteilungenPage() {
   const assessments = await getRiskAssessments();
 
+  const selectedCompanyId = getSelectedCompanyId();
+  const assessmentCompanyFilter = selectedCompanyId
+    ? { companyId: selectedCompanyId }
+    : {};
+
   const openMeasures = await prisma.riskAssessmentHazard
     .count({
       where: {
         status: "open",
-        assessment: { status: { not: "archived" } },
+        assessment: { status: { not: "archived" }, ...assessmentCompanyFilter },
       },
     })
     .catch(() => 0);
@@ -41,7 +51,7 @@ export default async function GefaehrdungsbeurteilungenPage() {
       where: {
         riskLevel: { in: ["HOCH", "KRITISCH"] },
         status: "open",
-        assessment: { status: { not: "archived" } },
+        assessment: { status: { not: "archived" }, ...assessmentCompanyFilter },
       },
     })
     .catch(() => 0);

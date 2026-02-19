@@ -75,6 +75,16 @@ interface DocumentDetailProps {
       notes: string | null;
       propagatedBy: { firstName: string; lastName: string } | null;
     }[];
+    gbaSubstances?: {
+      id: string;
+      tradeName: string;
+      company: { id: string; name: string };
+    }[];
+    baMachines?: {
+      id: string;
+      name: string;
+      company: { id: string; name: string };
+    }[];
   };
   allCompanies: { id: string; name: string }[];
 }
@@ -133,6 +143,31 @@ export function DocumentDetail({
       }
     } catch (error) {
       console.error("Error propagating:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const hasBaLinks =
+    (doc.gbaSubstances && doc.gbaSubstances.length > 0) ||
+    (doc.baMachines && doc.baMachines.length > 0);
+
+  const handlePropagateBA = async () => {
+    if (!confirm("Betriebsanweisung an alle verknüpften Betriebe propagieren?")) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/documents/${doc.id}/propagate-ba`, {
+        method: "POST",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        alert(`Erfolgreich an ${data.companiesUpdated} Betriebe propagiert.`);
+        router.refresh();
+      } else {
+        throw new Error("Fehler");
+      }
+    } catch {
+      alert("Fehler bei der Propagierung");
     } finally {
       setLoading(false);
     }
@@ -364,6 +399,79 @@ export function DocumentDetail({
           </CardContent>
         </Card>
       </div>
+
+      {/* BA Usage Section */}
+      {hasBaLinks && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                Verknüpfte Betriebsanweisungen
+              </CardTitle>
+              <Button size="sm" onClick={handlePropagateBA} disabled={loading}>
+                {loading ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                )}
+                An alle Betriebe propagieren
+              </Button>
+            </div>
+            <CardDescription>
+              Diese Vorlage ist als Betriebsanweisung mit folgenden
+              Gefahrstoffen/Maschinen verknüpft. Beim Download wird sie mit den
+              jeweiligen Firmendaten personalisiert.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {doc.gbaSubstances?.map((s) => (
+                <div
+                  key={s.id}
+                  className="flex items-center justify-between rounded-md border px-3 py-2"
+                >
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-xs">
+                      Gefahrstoff
+                    </Badge>
+                    <Link
+                      href={`/gefahrstoffe/${s.id}`}
+                      className="text-sm font-medium text-primary hover:underline"
+                    >
+                      {s.tradeName}
+                    </Link>
+                  </div>
+                  <span className="text-sm text-muted-foreground">
+                    {s.company.name}
+                  </span>
+                </div>
+              ))}
+              {doc.baMachines?.map((m) => (
+                <div
+                  key={m.id}
+                  className="flex items-center justify-between rounded-md border px-3 py-2"
+                >
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-xs">
+                      Maschine
+                    </Badge>
+                    <Link
+                      href={`/maschinen/${m.id}`}
+                      className="text-sm font-medium text-primary hover:underline"
+                    >
+                      {m.name}
+                    </Link>
+                  </div>
+                  <span className="text-sm text-muted-foreground">
+                    {m.company.name}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Propagation History */}
       {doc.propagations.length > 0 && (

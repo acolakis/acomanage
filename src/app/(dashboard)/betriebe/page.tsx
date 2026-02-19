@@ -2,11 +2,14 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { prisma } from "@/lib/prisma";
+import { getSelectedCompanyId } from "@/lib/company-filter";
 import { CompanyTable } from "@/components/companies/company-table";
 
 async function getCompanies() {
   try {
+    const selectedCompanyId = getSelectedCompanyId();
     const companies = await prisma.company.findMany({
+      where: selectedCompanyId ? { id: selectedCompanyId } : undefined,
       include: {
         industry: true,
         _count: {

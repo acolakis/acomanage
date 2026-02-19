@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getSelectedCompanyId } from "@/lib/company-filter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Activity, Building2, ClipboardCheck, FileText, Cog, Shield, FlaskConical } from "lucide-react";
@@ -14,32 +15,36 @@ interface ActivityItem {
 }
 
 async function getRecentActivity(): Promise<ActivityItem[]> {
+  const selectedCompanyId = getSelectedCompanyId();
+  const companyFilter = selectedCompanyId ? { companyId: selectedCompanyId } : {};
+
   // Query the 5 most recent from each entity type
   const [inspections, companies, substances, machines, assessments] = await Promise.all([
     prisma.inspection.findMany({
+      where: { ...companyFilter },
       orderBy: { updatedAt: "desc" },
       take: 5,
       include: { company: { select: { name: true } } },
     }),
     prisma.company.findMany({
-      where: { isActive: true },
+      where: { isActive: true, ...(selectedCompanyId ? { id: selectedCompanyId } : {}) },
       orderBy: { updatedAt: "desc" },
       take: 5,
     }),
     prisma.hazardousSubstance.findMany({
-      where: { status: { not: "archived" } },
+      where: { status: { not: "archived" }, ...companyFilter },
       orderBy: { updatedAt: "desc" },
       take: 5,
       include: { company: { select: { name: true } } },
     }),
     prisma.machine.findMany({
-      where: { status: { not: "archived" } },
+      where: { status: { not: "archived" }, ...companyFilter },
       orderBy: { updatedAt: "desc" },
       take: 5,
       include: { company: { select: { name: true } } },
     }),
     prisma.riskAssessment.findMany({
-      where: { status: { not: "archived" } },
+      where: { status: { not: "archived" }, ...companyFilter },
       orderBy: { updatedAt: "desc" },
       take: 5,
       include: { company: { select: { name: true } } },

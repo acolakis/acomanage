@@ -6,12 +6,17 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { prisma } from "@/lib/prisma";
+import { getSelectedCompanyId } from "@/lib/company-filter";
 import { SubstanceListFilter } from "@/components/substances/substance-list-filter";
 
 async function getSubstances() {
   try {
+    const selectedCompanyId = getSelectedCompanyId();
     return await prisma.hazardousSubstance.findMany({
-      where: { status: "active" },
+      where: {
+        status: "active",
+        ...(selectedCompanyId ? { companyId: selectedCompanyId } : {}),
+      },
       include: {
         company: { select: { id: true, name: true } },
       },
@@ -24,8 +29,12 @@ async function getSubstances() {
 
 async function getCompanies() {
   try {
+    const selectedCompanyId = getSelectedCompanyId();
     return await prisma.company.findMany({
-      where: { isActive: true },
+      where: {
+        isActive: true,
+        ...(selectedCompanyId ? { id: selectedCompanyId } : {}),
+      },
       select: { id: true, name: true, _count: { select: { hazardousSubstances: true } } },
       orderBy: { name: "asc" },
     });

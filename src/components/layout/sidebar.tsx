@@ -14,6 +14,7 @@ import {
   Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { CompanySelector } from "@/components/layout/company-selector";
 
 const navigationItems = [
   {
@@ -98,6 +99,9 @@ export function Sidebar() {
             <span className="text-lg font-semibold tracking-tight">AcoManage</span>
           </Link>
         </div>
+
+        {/* Company Selector */}
+        <CompanySelector />
 
         {/* Navigation */}
         <nav className="flex-1 px-3 py-4 space-y-6">

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Loader2, Trash2, Cog, Pencil, FileText, BookOpen } from "lucide-react";
+import { ArrowLeft, Loader2, Trash2, Cog, Pencil, FileText, BookOpen, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -13,6 +13,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { ManualExtractionDialog } from "@/components/machines/manual-extraction-dialog";
+import { AdoptBaDialog } from "@/components/machines/adopt-ba-dialog";
 
 interface MachineData {
   id: string;
@@ -24,6 +25,7 @@ interface MachineData {
   location: string | null;
   yearOfManufacture: number | null;
   status: string;
+  baDocument: { id: string; title: string; filePath: string | null } | null;
   company: { id: string; name: string };
   createdBy: { firstName: string; lastName: string } | null;
   createdAt: string;
@@ -71,6 +73,8 @@ export default function MaschineDetailPage() {
   const [machine, setMachine] = useState<MachineData | null>(null);
   const [loading, setLoading] = useState(true);
   const [extractionOpen, setExtractionOpen] = useState(false);
+  const [adoptOpen, setAdoptOpen] = useState(false);
+  const [baDownloading, setBaDownloading] = useState(false);
 
   const fetchMachine = useCallback(async () => {
     try {
@@ -87,6 +91,31 @@ export default function MaschineDetailPage() {
   useEffect(() => {
     fetchMachine();
   }, [fetchMachine]);
+
+  const handleDownloadBa = async () => {
+    if (!machine?.baDocument || !machine?.company) return;
+    setBaDownloading(true);
+    try {
+      const res = await fetch(
+        `/api/companies/${machine.company.id}/templates/${machine.baDocument.id}/download`
+      );
+      if (!res.ok) throw new Error("Fehler");
+      const blob = await res.blob();
+      const disposition = res.headers.get("Content-Disposition") || "";
+      const match = disposition.match(/filename="?(.+?)"?$/);
+      const filename = match ? decodeURIComponent(match[1]) : `BA_${machine.name}.docx`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert("Fehler beim Herunterladen der Betriebsanweisung");
+    } finally {
+      setBaDownloading(false);
+    }
+  };
 
   const handleDelete = async () => {
     if (!confirm("Maschine wirklich löschen?")) return;
@@ -196,6 +225,60 @@ export default function MaschineDetailPage() {
               </p>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* BA Dokument (.docx) */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <FileText className="h-5 w-5" />
+            Betriebsanweisung (.docx)
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {machine.baDocument ? (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">{machine.baDocument.title}</p>
+                <p className="text-xs text-muted-foreground">
+                  Wird beim Download mit den Firmendaten personalisiert
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDownloadBa}
+                  disabled={baDownloading}
+                >
+                  {baDownloading ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Download className="mr-2 h-4 w-4" />
+                  )}
+                  Download
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setAdoptOpen(true)}
+                >
+                  Ändern
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-4">
+              <p className="text-sm text-muted-foreground mb-3">
+                Keine Betriebsanweisung (.docx) zugewiesen.
+              </p>
+              <Button variant="outline" onClick={() => setAdoptOpen(true)}>
+                <FileText className="mr-2 h-4 w-4" />
+                BA übernehmen
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -309,6 +392,14 @@ export default function MaschineDetailPage() {
         machineId={machine.id}
         open={extractionOpen}
         onOpenChange={setExtractionOpen}
+        onComplete={() => fetchMachine()}
+      />
+
+      <AdoptBaDialog
+        machineId={machine.id}
+        machineName={machine.name}
+        open={adoptOpen}
+        onOpenChange={setAdoptOpen}
         onComplete={() => fetchMachine()}
       />
     </div>

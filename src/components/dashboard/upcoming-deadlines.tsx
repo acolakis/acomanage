@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getSelectedCompanyId } from "@/lib/company-filter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Clock, AlertTriangle } from "lucide-react";
@@ -16,10 +17,13 @@ export async function UpcomingDeadlines() {
   const in30Days = new Date();
   in30Days.setDate(in30Days.getDate() + 30);
 
+  const selectedCompanyId = getSelectedCompanyId();
+
   const findings = await prisma.inspectionFinding.findMany({
     where: {
       status: { in: ["OPEN", "IN_PROGRESS"] },
       deadline: { not: null, lte: in30Days },
+      ...(selectedCompanyId ? { inspection: { companyId: selectedCompanyId } } : {}),
     },
     orderBy: { deadline: "asc" },
     take: 10,
