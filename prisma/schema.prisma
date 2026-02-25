@@ -47,6 +47,25 @@ model User {
   notifications     Notification[]
   auditLogs         AuditLog[]
   createdInspectionTemplates InspectionTemplate[] @relation("InspectionTemplateCreatedBy")
+  investigatedIncidents Incident[]         @relation("IncidentInvestigator")
+  createdIncidents      Incident[]         @relation("IncidentCreatedBy")
+  responsibleActions    CorrectiveAction[] @relation("ActionResponsible")
+  effectivenessChecks   CorrectiveAction[] @relation("ActionEffectivenessBy")
+  createdActions        CorrectiveAction[] @relation("ActionCreatedBy")
+  createdTrainings      TrainingEvent[]    @relation("TrainingCreatedBy")
+  createdCompetences    CompetenceRequirement[] @relation("CompetenceCreatedBy")
+  responsibleObjectives OhsObjective[]     @relation("ObjectiveResponsible")
+  createdObjectives     OhsObjective[]     @relation("ObjectiveCreatedBy")
+  recordedProgress      ObjectiveProgress[] @relation("ProgressRecordedBy")
+  createdLegalReqs      LegalRequirement[] @relation("LegalReqCreatedBy")
+  auditedAudits         InternalAudit[]    @relation("AuditAuditor")
+  createdAudits         InternalAudit[]    @relation("AuditCreatedBy")
+  approvedReviews       ManagementReview[] @relation("ReviewApprovedBy")
+  createdReviews        ManagementReview[] @relation("ReviewCreatedBy")
+  createdEmergencyPlans EmergencyPlan[]    @relation("EmergencyPlanCreatedBy")
+  requestedChanges      ChangeRequest[]    @relation("ChangeRequestedBy")
+  approvedChanges       ChangeRequest[]    @relation("ChangeApprovedBy")
+  recordedKpiValues     KpiValue[]         @relation("KpiRecordedBy")
 
   @@map("users")
 }
@@ -90,6 +109,7 @@ model DocumentCategory {
   fullName    String   @map("full_name")
   parentGroup String   @map("parent_group")
   description String?
+  isoClause   String?  @map("iso_clause")
   sortOrder   Int      @default(0) @map("sort_order")
   isActive    Boolean  @default(true) @map("is_active")
   createdAt   DateTime @default(now()) @map("created_at")
@@ -154,6 +174,18 @@ model Company {
   hazardousSubstances HazardousSubstance[]
   machines            Machine[]
   riskAssessments     RiskAssessment[]
+  incidents           Incident[]
+  correctiveActions   CorrectiveAction[]
+  trainingEvents      TrainingEvent[]
+  competenceRequirements CompetenceRequirement[]
+  context             CompanyContext?
+  ohsObjectives       OhsObjective[]
+  legalRequirements   LegalRequirement[]
+  internalAudits      InternalAudit[]
+  managementReviews   ManagementReview[]
+  emergencyPlans      EmergencyPlan[]
+  changeRequests      ChangeRequest[]
+  kpiValues           KpiValue[]
 
   @@map("companies")
 }
@@ -186,6 +218,43 @@ model CompanyUser {
 
   @@unique([companyId, userId])
   @@map("company_users")
+}
+
+// ============================================================
+// COMPANY CONTEXT (ISO 45001 Clause 4 + 5)
+// ============================================================
+
+model CompanyContext {
+  id                      String    @id @default(uuid())
+  companyId               String    @unique @map("company_id")
+  // Clause 4.1: Kontext der Organisation
+  internalIssues          String?   @map("internal_issues")
+  externalIssues          String?   @map("external_issues")
+  // Clause 4.2: Interessierte Parteien
+  interestedParties       Json?     @map("interested_parties") // [{party, needs, expectations}]
+  // Clause 4.3: Geltungsbereich
+  sgaScope                String?   @map("sga_scope")
+  scopeInclusions         String?   @map("scope_inclusions")
+  scopeExclusions         String?   @map("scope_exclusions")
+  // Clause 5.2: SGA-Politik
+  ohsPolicy               String?   @map("ohs_policy")
+  ohsPolicyDate           DateTime? @map("ohs_policy_date") @db.Date
+  ohsPolicyApprovedBy     String?   @map("ohs_policy_approved_by")
+  ohsPolicyDocPath        String?   @map("ohs_policy_doc_path")
+  // Clause 5.3: Rollen und Verantwortlichkeiten
+  ohsRoles                Json?     @map("ohs_roles") // [{role, person, responsibilities, appointedDate}]
+  // Clause 5.4: Beteiligung der Beschäftigten
+  participationMechanism  String?   @map("participation_mechanism")
+  // Metadata
+  version                 Int       @default(1)
+  lastReviewDate          DateTime? @map("last_review_date") @db.Date
+  nextReviewDate          DateTime? @map("next_review_date") @db.Date
+  createdAt               DateTime  @default(now()) @map("created_at")
+  updatedAt               DateTime  @updatedAt @map("updated_at")
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@map("company_contexts")
 }
 
 // ============================================================
@@ -614,6 +683,613 @@ model RiskAssessmentHazard {
   assessment RiskAssessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
 
   @@map("risk_assessment_hazards")
+}
+
+// ============================================================
+// INCIDENTS (Vorfälle / Unfälle) — Clause 10.2
+// ============================================================
+
+enum IncidentType {
+  UNFALL
+  BEINAHEUNFALL
+  VORFALL
+  BERUFSKRANKHEIT
+  ERSTEHILFE
+}
+
+enum IncidentSeverity {
+  GERING
+  MITTEL
+  SCHWER
+  TOEDLICH
+}
+
+enum IncidentStatus {
+  GEMELDET
+  IN_UNTERSUCHUNG
+  MASSNAHMEN
+  ABGESCHLOSSEN
+}
+
+enum RootCauseCategory {
+  MENSCH
+  TECHNIK
+  ORGANISATION
+  UMGEBUNG
+}
+
+model Incident {
+  id                String           @id @default(uuid())
+  companyId         String           @map("company_id")
+  incidentNumber    String?          @map("incident_number")
+  incidentType      IncidentType     @map("incident_type")
+  severity          IncidentSeverity
+  status            IncidentStatus   @default(GEMELDET)
+  incidentDate      DateTime         @map("incident_date") @db.Date
+  incidentTime      String?          @map("incident_time")
+  location          String?
+  department        String?
+  description       String
+  affectedPerson    String?          @map("affected_person")
+  affectedRole      String?          @map("affected_role")
+  witnesses         String?
+  rootCause         String?          @map("root_cause")
+  rootCauseCategory RootCauseCategory? @map("root_cause_category")
+  contributingFactors String?        @map("contributing_factors")
+  investigatedById  String?          @map("investigated_by")
+  investigatedAt    DateTime?        @map("investigated_at")
+  injuryType        String?          @map("injury_type")
+  bodyPart          String?          @map("body_part")
+  lostWorkDays      Int?             @map("lost_work_days")
+  bgReportable      Boolean          @default(false) @map("bg_reportable")
+  bgReportDate      DateTime?        @map("bg_report_date") @db.Date
+  bgReportNumber    String?          @map("bg_report_number")
+  closedAt          DateTime?        @map("closed_at")
+  createdById       String?          @map("created_by")
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+
+  company        Company           @relation(fields: [companyId], references: [id])
+  investigatedBy User?             @relation("IncidentInvestigator", fields: [investigatedById], references: [id])
+  createdBy      User?             @relation("IncidentCreatedBy", fields: [createdById], references: [id])
+  photos         IncidentPhoto[]
+  actions        CorrectiveAction[] @relation("IncidentActions")
+
+  @@map("incidents")
+}
+
+model IncidentPhoto {
+  id         String    @id @default(uuid())
+  incidentId String    @map("incident_id")
+  filePath   String    @map("file_path")
+  fileName   String?   @map("file_name")
+  caption    String?
+  sortOrder  Int       @default(0) @map("sort_order")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@map("incident_photos")
+}
+
+// ============================================================
+// CORRECTIVE ACTIONS (Maßnahmenverfolgung) — Clause 10.2
+// ============================================================
+
+enum ActionSourceType {
+  BEGEHUNG
+  GBU
+  VORFALL
+  AUDIT
+  MANAGEMENT_REVIEW
+  EXTERN
+  SONSTIG
+}
+
+enum ActionPriority {
+  NIEDRIG
+  MITTEL
+  HOCH
+  SOFORT
+}
+
+enum ActionStatus {
+  OFFEN
+  IN_BEARBEITUNG
+  UMGESETZT
+  WIRKSAMKEIT_GEPRUEFT
+  ABGESCHLOSSEN
+}
+
+enum EffectivenessResult {
+  WIRKSAM
+  TEILWEISE
+  UNWIRKSAM
+}
+
+model CorrectiveAction {
+  id                  String              @id @default(uuid())
+  companyId           String              @map("company_id")
+  actionNumber        String?             @map("action_number")
+  title               String
+  description         String?
+  sourceType          ActionSourceType    @map("source_type")
+  sourceId            String?             @map("source_id")
+  sourceReference     String?             @map("source_reference")
+  priority            ActionPriority      @default(MITTEL)
+  status              ActionStatus        @default(OFFEN)
+  measureType         String?             @map("measure_type") // 'T', 'O', 'P'
+  responsibleId       String?             @map("responsible_id")
+  deadline            DateTime?           @db.Date
+  completedAt         DateTime?           @map("completed_at")
+  effectivenessCheck  String?             @map("effectiveness_check")
+  effectivenessDate   DateTime?           @map("effectiveness_date") @db.Date
+  effectivenessResult EffectivenessResult? @map("effectiveness_result")
+  effectivenessById   String?             @map("effectiveness_by")
+  incidentId          String?             @map("incident_id")
+  createdById         String?             @map("created_by")
+  createdAt           DateTime            @default(now()) @map("created_at")
+  updatedAt           DateTime            @updatedAt @map("updated_at")
+
+  company        Company  @relation(fields: [companyId], references: [id])
+  responsible    User?    @relation("ActionResponsible", fields: [responsibleId], references: [id])
+  effectivenessBy User?   @relation("ActionEffectivenessBy", fields: [effectivenessById], references: [id])
+  incident       Incident? @relation("IncidentActions", fields: [incidentId], references: [id])
+  createdBy      User?    @relation("ActionCreatedBy", fields: [createdById], references: [id])
+  auditFindings  AuditFinding[]
+
+  @@map("corrective_actions")
+}
+
+// ============================================================
+// OHS OBJECTIVES (SGA-Ziele) — Clause 6.2
+// ============================================================
+
+enum ObjectiveStatus {
+  ENTWURF
+  AKTIV
+  ERREICHT
+  NICHT_ERREICHT
+  ARCHIVIERT
+}
+
+model OhsObjective {
+  id              String          @id @default(uuid())
+  companyId       String          @map("company_id")
+  title           String
+  description     String?
+  targetValue     String?         @map("target_value")
+  currentValue    String?         @map("current_value")
+  unit            String?
+  status          ObjectiveStatus @default(ENTWURF)
+  responsibleId   String?         @map("responsible_id")
+  startDate       DateTime?       @map("start_date") @db.Date
+  targetDate      DateTime?       @map("target_date") @db.Date
+  isoClause       String?         @map("iso_clause")
+  relatedRiskId   String?         @map("related_risk_id")
+  createdById     String?         @map("created_by")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+
+  company     Company             @relation(fields: [companyId], references: [id])
+  responsible User?               @relation("ObjectiveResponsible", fields: [responsibleId], references: [id])
+  createdBy   User?               @relation("ObjectiveCreatedBy", fields: [createdById], references: [id])
+  progress    ObjectiveProgress[]
+
+  @@map("ohs_objectives")
+}
+
+model ObjectiveProgress {
+  id           String   @id @default(uuid())
+  objectiveId  String   @map("objective_id")
+  value        String
+  note         String?
+  recordedAt   DateTime @default(now()) @map("recorded_at")
+  recordedById String?  @map("recorded_by")
+
+  objective  OhsObjective @relation(fields: [objectiveId], references: [id], onDelete: Cascade)
+  recordedBy User?        @relation("ProgressRecordedBy", fields: [recordedById], references: [id])
+
+  @@map("objective_progress")
+}
+
+// ============================================================
+// LEGAL REQUIREMENTS (Rechtskataster) — Clause 6.1.3
+// ============================================================
+
+enum ComplianceStatus {
+  OFFEN
+  KONFORM
+  TEILWEISE
+  NICHT_KONFORM
+}
+
+model LegalRequirement {
+  id               String           @id @default(uuid())
+  companyId        String           @map("company_id")
+  category         String
+  title            String
+  shortTitle       String?          @map("short_title")
+  section          String?
+  description      String?
+  relevance        String?
+  complianceStatus ComplianceStatus @default(OFFEN) @map("compliance_status")
+  complianceNotes  String?          @map("compliance_notes")
+  lastReviewDate   DateTime?        @map("last_review_date") @db.Date
+  nextReviewDate   DateTime?        @map("next_review_date") @db.Date
+  sourceUrl        String?          @map("source_url")
+  isActive         Boolean          @default(true) @map("is_active")
+  createdById      String?          @map("created_by")
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+
+  company   Company @relation(fields: [companyId], references: [id])
+  createdBy User?   @relation("LegalReqCreatedBy", fields: [createdById], references: [id])
+
+  @@map("legal_requirements")
+}
+
+// ============================================================
+// TRAININGS (Schulungen / Unterweisungen) — Clause 7.2
+// ============================================================
+
+enum TrainingType {
+  ERSTUNTERWEISUNG
+  UNTERWEISUNG
+  FORTBILDUNG
+  ZERTIFIKAT
+  ERSTE_HILFE
+  BRANDSCHUTZ
+  GEFAHRSTOFF
+  PSA
+  MASCHINE
+  ELEKTRO
+  HOEHENARBEIT
+  STAPLERFAHRER
+  BILDSCHIRMARBEIT
+  SONSTIG
+}
+
+enum TrainingStatus {
+  GEPLANT
+  DURCHGEFUEHRT
+  ABGESAGT
+  UEBERFAELLIG
+}
+
+model TrainingTemplate {
+  id                String       @id @default(uuid())
+  title             String
+  trainingType      TrainingType @map("training_type")
+  description       String?
+  legalBasis        String?      @map("legal_basis")
+  targetGroup       String?      @map("target_group")
+  content           String?
+  sections          Json?
+  recurrenceMonths  Int?         @map("recurrence_months")
+  durationMinutes   Int?         @map("duration_minutes")
+  isActive          Boolean      @default(true) @map("is_active")
+  sortOrder         Int          @default(0) @map("sort_order")
+  createdAt         DateTime     @default(now()) @map("created_at")
+
+  trainings TrainingEvent[] @relation("FromTemplate")
+
+  @@map("training_templates")
+}
+
+model TrainingEvent {
+  id                String        @id @default(uuid())
+  companyId         String        @map("company_id")
+  templateId        String?       @map("template_id")
+  title             String
+  trainingType      TrainingType  @map("training_type")
+  description       String?
+  legalBasis        String?       @map("legal_basis")
+  content           String?
+  sections          Json?
+  instructor        String?
+  location          String?
+  trainingDate      DateTime?     @map("training_date") @db.Date
+  startTime         String?       @map("start_time")
+  duration          Int?
+  status            TrainingStatus @default(GEPLANT)
+  recurrenceMonths  Int?          @map("recurrence_months")
+  nextDueDate       DateTime?     @map("next_due_date") @db.Date
+  signatureDocPath  String?       @map("signature_doc_path")
+  notes             String?
+  completedAt       DateTime?     @map("completed_at")
+  createdById       String?       @map("created_by")
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+
+  company      Company           @relation(fields: [companyId], references: [id])
+  template     TrainingTemplate? @relation("FromTemplate", fields: [templateId], references: [id])
+  createdBy    User?             @relation("TrainingCreatedBy", fields: [createdById], references: [id])
+  participants TrainingParticipant[]
+
+  @@map("training_events")
+}
+
+model TrainingParticipant {
+  id              String    @id @default(uuid())
+  trainingId      String    @map("training_id")
+  participantName String    @map("participant_name")
+  department      String?
+  attended        Boolean   @default(false)
+  signedAt        DateTime? @map("signed_at")
+  notes           String?
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  training TrainingEvent @relation(fields: [trainingId], references: [id], onDelete: Cascade)
+
+  @@map("training_participants")
+}
+
+model CompetenceRequirement {
+  id                String   @id @default(uuid())
+  companyId         String   @map("company_id")
+  role              String
+  qualification     String
+  legalBasis        String?  @map("legal_basis")
+  recurrenceMonths  Int?     @map("recurrence_months")
+  isRequired        Boolean  @default(true) @map("is_required")
+  createdById       String?  @map("created_by")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  company   Company @relation(fields: [companyId], references: [id])
+  createdBy User?   @relation("CompetenceCreatedBy", fields: [createdById], references: [id])
+
+  @@map("competence_requirements")
+}
+
+// ============================================================
+// KPI SYSTEM (Kennzahlen) — Clause 9.1
+// ============================================================
+
+model KpiDefinition {
+  id              String   @id @default(uuid())
+  code            String   @unique
+  name            String
+  description     String?
+  unit            String?
+  formula         String?
+  isoClause       String?  @map("iso_clause")
+  isAutomatic     Boolean  @default(false) @map("is_automatic")
+  targetDirection String?  @map("target_direction") // 'lower_is_better', 'higher_is_better'
+  sortOrder       Int      @default(0) @map("sort_order")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  values KpiValue[]
+
+  @@map("kpi_definitions")
+}
+
+model KpiValue {
+  id           String   @id @default(uuid())
+  kpiId        String   @map("kpi_id")
+  companyId    String   @map("company_id")
+  period       String   // e.g., "2025-Q1", "2025-01"
+  value        Float
+  target       Float?
+  notes        String?
+  recordedById String?  @map("recorded_by")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  kpi        KpiDefinition @relation(fields: [kpiId], references: [id], onDelete: Cascade)
+  company    Company       @relation(fields: [companyId], references: [id])
+  recordedBy User?         @relation("KpiRecordedBy", fields: [recordedById], references: [id])
+
+  @@unique([kpiId, companyId, period])
+  @@map("kpi_values")
+}
+
+// ============================================================
+// EMERGENCY PLANS (Notfallplanung) — Clause 8.2
+// ============================================================
+
+enum EmergencyType {
+  BRAND
+  CHEMIE
+  UNFALL
+  EVAKUIERUNG
+  NATURKATASTROPHE
+  STROMAUSFALL
+  SONSTIG
+}
+
+model EmergencyPlan {
+  id                  String        @id @default(uuid())
+  companyId           String        @map("company_id")
+  title               String
+  emergencyType       EmergencyType @map("emergency_type")
+  description         String?
+  procedures          String?
+  responsiblePersons  Json?         @map("responsible_persons") // [{name, role, phone}]
+  emergencyNumbers    Json?         @map("emergency_numbers") // [{name, number}]
+  documentPath        String?       @map("document_path")
+  lastDrillDate       DateTime?     @map("last_drill_date") @db.Date
+  nextDrillDate       DateTime?     @map("next_drill_date") @db.Date
+  isActive            Boolean       @default(true) @map("is_active")
+  version             Int           @default(1)
+  createdById         String?       @map("created_by")
+  createdAt           DateTime      @default(now()) @map("created_at")
+  updatedAt           DateTime      @updatedAt @map("updated_at")
+
+  company   Company          @relation(fields: [companyId], references: [id])
+  createdBy User?            @relation("EmergencyPlanCreatedBy", fields: [createdById], references: [id])
+  drills    EmergencyDrill[]
+
+  @@map("emergency_plans")
+}
+
+model EmergencyDrill {
+  id                 String   @id @default(uuid())
+  planId             String   @map("plan_id")
+  drillDate          DateTime @map("drill_date") @db.Date
+  participants       String?
+  duration           Int?
+  findings           String?
+  evaluation         String?
+  improvementActions String?  @map("improvement_actions")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  plan EmergencyPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@map("emergency_drills")
+}
+
+// ============================================================
+// CHANGE REQUESTS (Änderungsmanagement) — Clause 8.1.3
+// ============================================================
+
+enum ChangeType {
+  PROZESS
+  ARBEITSPLATZ
+  MATERIAL
+  ORGANISATION
+  SONSTIG
+}
+
+enum ChangeRequestStatus {
+  BEANTRAGT
+  BEWERTET
+  GENEHMIGT
+  UMGESETZT
+  ABGELEHNT
+}
+
+model ChangeRequest {
+  id              String              @id @default(uuid())
+  companyId       String              @map("company_id")
+  changeNumber    String?             @map("change_number")
+  title           String
+  changeType      ChangeType          @map("change_type")
+  description     String?
+  risksBefore     String?             @map("risks_before")
+  risksAfter      String?             @map("risks_after")
+  mitigations     String?
+  status          ChangeRequestStatus @default(BEANTRAGT)
+  requestedById   String?             @map("requested_by")
+  approvedById    String?             @map("approved_by")
+  approvedAt      DateTime?           @map("approved_at")
+  implementedAt   DateTime?           @map("implemented_at")
+  createdAt       DateTime            @default(now()) @map("created_at")
+  updatedAt       DateTime            @updatedAt @map("updated_at")
+
+  company     Company @relation(fields: [companyId], references: [id])
+  requestedBy User?   @relation("ChangeRequestedBy", fields: [requestedById], references: [id])
+  approvedBy  User?   @relation("ChangeApprovedBy", fields: [approvedById], references: [id])
+
+  @@map("change_requests")
+}
+
+// ============================================================
+// INTERNAL AUDITS (Interne Audits) — Clause 9.2
+// ============================================================
+
+enum AuditType {
+  SYSTEM
+  PROZESS
+  COMPLIANCE
+}
+
+enum InternalAuditStatus {
+  GEPLANT
+  IN_DURCHFUEHRUNG
+  BERICHT
+  ABGESCHLOSSEN
+}
+
+enum FindingType {
+  ABWEICHUNG_SCHWER
+  ABWEICHUNG_LEICHT
+  VERBESSERUNG
+  POSITIV
+}
+
+model InternalAudit {
+  id              String              @id @default(uuid())
+  companyId       String              @map("company_id")
+  auditNumber     String?             @map("audit_number")
+  title           String
+  auditType       AuditType           @map("audit_type")
+  isoClause       String?             @map("iso_clause")
+  status          InternalAuditStatus @default(GEPLANT)
+  plannedDate     DateTime?           @map("planned_date") @db.Date
+  actualDate      DateTime?           @map("actual_date") @db.Date
+  auditorId       String?             @map("auditor_id")
+  auditees        String?
+  scope           String?
+  summary         String?
+  positiveFindings String?            @map("positive_findings")
+  completedAt     DateTime?           @map("completed_at")
+  createdById     String?             @map("created_by")
+  createdAt       DateTime            @default(now()) @map("created_at")
+  updatedAt       DateTime            @updatedAt @map("updated_at")
+
+  company    Company        @relation(fields: [companyId], references: [id])
+  auditor    User?          @relation("AuditAuditor", fields: [auditorId], references: [id])
+  createdBy  User?          @relation("AuditCreatedBy", fields: [createdById], references: [id])
+  findings   AuditFinding[]
+
+  @@map("internal_audits")
+}
+
+model AuditFinding {
+  id             String      @id @default(uuid())
+  auditId        String      @map("audit_id")
+  findingNumber  Int         @map("finding_number")
+  findingType    FindingType @map("finding_type")
+  isoClause      String?     @map("iso_clause")
+  description    String
+  evidence       String?
+  actionId       String?     @map("action_id")
+  createdAt      DateTime    @default(now()) @map("created_at")
+
+  audit  InternalAudit    @relation(fields: [auditId], references: [id], onDelete: Cascade)
+  action CorrectiveAction? @relation(fields: [actionId], references: [id])
+
+  @@map("audit_findings")
+}
+
+// ============================================================
+// MANAGEMENT REVIEW (Managementbewertung) — Clause 9.3
+// ============================================================
+
+model ManagementReview {
+  id                     String    @id @default(uuid())
+  companyId              String    @map("company_id")
+  reviewNumber           String?   @map("review_number")
+  reviewDate             DateTime  @map("review_date") @db.Date
+  // Inputs (Clause 9.3)
+  statusPreviousActions  String?   @map("status_previous_actions")
+  changesInternalExternal String?  @map("changes_internal_external")
+  ohsPerformance         Json?     @map("ohs_performance")
+  incidentSummary        String?   @map("incident_summary")
+  auditResults           String?   @map("audit_results")
+  consultationResults    String?   @map("consultation_results")
+  risksOpportunities     String?   @map("risks_opportunities")
+  objectiveProgress      String?   @map("objective_progress")
+  // Outputs
+  ohsFitness             String?   @map("ohs_fitness")
+  improvementNeeds       String?   @map("improvement_needs")
+  resourceNeeds          String?   @map("resource_needs")
+  decisions              String?
+  // Meta
+  attendees              String?
+  approvedById           String?   @map("approved_by")
+  approvedAt             DateTime? @map("approved_at")
+  pdfPath                String?   @map("pdf_path")
+  createdById            String?   @map("created_by")
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
+
+  company    Company @relation(fields: [companyId], references: [id])
+  approvedBy User?   @relation("ReviewApprovedBy", fields: [approvedById], references: [id])
+  createdBy  User?   @relation("ReviewCreatedBy", fields: [createdById], references: [id])
+
+  @@map("management_reviews")
 }
 
 // ============================================================

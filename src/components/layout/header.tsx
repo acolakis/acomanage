@@ -66,7 +66,7 @@ export function Header() {
     : "/benachrichtigungen";
 
   return (
-    <header className="sticky top-0 z-20 flex h-16 items-center gap-4 border-b bg-card px-4 md:px-6">
+    <header className="z-20 flex h-16 shrink-0 items-center gap-4 border-b bg-card px-4 md:px-6">
       {/* Mobile menu */}
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetTrigger asChild>

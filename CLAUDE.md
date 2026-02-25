@@ -10,8 +10,9 @@ AcoManage is an occupational safety management platform (Arbeitsschutz-Managemen
 
 ```bash
 # Development
-npm run dev              # Start dev server with Turbopack (next dev --turbo)
+npm run dev              # Start dev server with Turbopack on port 3002
 npm run build            # Production build (also runs ESLint + type checking)
+npm run start            # Production start on port 3002
 npm run lint             # ESLint only
 
 # Database
@@ -19,6 +20,8 @@ docker compose up -d     # Start PostgreSQL 16
 npm run db:migrate       # npx prisma migrate dev
 npm run db:seed          # npx tsx prisma/seed.ts
 npm run db:studio        # Prisma Studio GUI
+npm run db:import-templates  # Import document files from external folder (prisma/import-templates.ts)
+npx tsx prisma/seed-inspections.ts  # Seed inspection checklist templates (separate script, no npm alias)
 ```
 
 There are no tests configured. Use `npm run build` as the primary verification step.
@@ -64,7 +67,7 @@ Three roles: `ADMIN`, `EMPLOYEE`, `CLIENT`. Middleware in `src/middleware.ts` re
 API routes live in `src/app/api/`. All require authentication via `getServerSession(authOptions)` except `/api/industries`. Error messages are in German. Key API groups:
 - `/api/companies/[id]` — CRUD + `/categories`, `/templates/[documentId]/download`
 - `/api/documents/[id]` — CRUD + `/assign`, `/propagate`, `/propagate-ba`, `/download`
-- `/api/inspections/[id]` — CRUD + `/findings`, `/pdf`, `/photos`
+- `/api/inspections/[id]` — CRUD + `/findings`, `/pdf`, `/photos`, `/item-checks`
 - `/api/substances/[id]` — CRUD + `/gba` (PDF) + `/adopt-ba`
 - `/api/machines/[id]` — CRUD + `/adopt-ba`
 - `/api/risk-assessments/[id]` — CRUD + `/hazards`, `/pdf`
@@ -124,10 +127,13 @@ Config extends `next/core-web-vitals` and `next/typescript`. The `_` prefix does
 - Always filter with `status: { not: "archived" }` or `isActive: true` in queries
 
 ### Prisma Model Name Mapping
-The Prisma model `RiskAssessmentHazard` generates `prisma.riskAssessmentHazard` (not `prisma.hazard`). The relation field on the model uses `assessmentId` (not `riskAssessmentId`). Always check the actual model name in `schema.prisma`.
+The Prisma model `RiskAssessmentHazard` generates `prisma.riskAssessmentHazard` (not `prisma.hazard`). The relation field on the model uses `assessmentId` (not `riskAssessmentId`). `InspectionFinding` uses `deadline` (not `dueDate`) and `riskLevel` (not `priority`, nullable). Always check the actual model name in `schema.prisma`.
+
+### Inspection System
+12 industry-specific inspection templates seeded via `prisma/seed-inspections.ts` (run separately from main seed). Templates have sections → items with `suggestedMeasure` and `defaultRiskLevel`. `InspectionItemCheck` tracks per-item status with `ItemCheckStatus` enum: `UNCHECKED`, `IO`, `MANGEL`, `NICHT_RELEVANT`. Items marked `NICHT_RELEVANT` are excluded from PDF and progress calculation. Item checks support optional `lastTestDate`/`nextTestDate` for equipment inspection dates. The finding dialog supports photo upload (photos uploaded after finding creation). Multiple findings per checklist item are allowed.
 
 ### Enum Values
-Inspection-related enums use UPPERCASE values: `INITIAL`, `REGULAR`, `FOLLOWUP`, `SPECIAL`, `DRAFT`, `IN_PROGRESS`, `COMPLETED`, `SENT`, `NIEDRIG`, `MITTEL`, `HOCH`, `KRITISCH`, `OPEN`. Risk assessment status uses lowercase strings: `draft`, `active`, `review_needed`, `archived`.
+Inspection-related enums use UPPERCASE values: `INITIAL`, `REGULAR`, `FOLLOWUP`, `SPECIAL`, `DRAFT`, `IN_PROGRESS`, `COMPLETED`, `SENT`, `NIEDRIG`, `MITTEL`, `HOCH`, `KRITISCH`, `OPEN`. `ItemCheckStatus`: `UNCHECKED`, `IO`, `MANGEL`, `NICHT_RELEVANT`. Risk assessment status uses lowercase strings: `draft`, `active`, `review_needed`, `archived`.
 
 ### User Model
 The User model has `firstName` and `lastName` — there is no `name` field. The session's `name` is a computed `${firstName} ${lastName}` string set during login.
@@ -139,7 +145,7 @@ Radix Select requires a non-empty string value. Use a sentinel like `"__none__"`
 Use `JSON.parse(JSON.stringify(data))` when passing Prisma query results to client components (strips Date objects, Prisma types) and when writing to Prisma `Json` fields (e.g., `SdsExtraction`, `ManualExtraction` models).
 
 ### File Uploads
-Documents are stored in `uploads/documents/{category}/{uuid}_{filename}`. Multipart form data handling in API routes. The `uploads/` directory is a Docker volume.
+Documents are stored in `uploads/documents/{category}/{uuid}_{filename}`. Inspection photos in `uploads/inspections/{inspectionId}/{uuid}.ext`. Multipart form data handling in API routes. The `uploads/` directory is a Docker volume.
 
 ### Notifications & Email
 Fire-and-forget email sending via SMTP config from `SystemSetting` table (`getSmtpConfig()`). Templates in `src/lib/email-templates.ts` (German). Never blocks the main flow.
@@ -149,4 +155,4 @@ Fire-and-forget email sending via SMTP config from `SystemSetting` table (`getSm
 Connection: `postgresql://acomanage:acomanage_secret@localhost:5432/acomanage`
 Admin login: `admin@acomanage.de` / `AcoManage2024!`
 
-The seed creates 62 document categories (from real A01–XYZ03 folder structure), 12 industries with 534 default category mappings, and the admin user.
+The main seed (`prisma/seed.ts`) creates 62 document categories (from real A01–XYZ03 folder structure), 12 industries with 534 default category mappings, and the admin user. Document files are imported from an external folder via `npm run db:import-templates` (`prisma/import-templates.ts`). Inspection checklist templates are seeded separately via `npx tsx prisma/seed-inspections.ts` (12 industry-specific templates with ~400 items total, no npm script alias).

@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { logAudit } from "@/lib/audit";
 import { parsePaginationParams, paginatedResponse } from "@/lib/pagination";
+import { autoAssignTemplates } from "@/lib/auto-assign-templates";
 
 // GET /api/companies - List all companies with optional filters
 export async function GET(request: NextRequest) {
@@ -117,6 +118,11 @@ export async function POST(request: NextRequest) {
     });
 
     logAudit({ userId: session.user.id, action: "create", entityType: "company", entityId: company.id, details: { name: company.name } });
+
+    // Auto-assign industry-default templates
+    if (company.industryId) {
+      autoAssignTemplates(company.id, company.industryId, session.user.id).catch(console.error);
+    }
 
     return NextResponse.json(company, { status: 201 });
   } catch (error) {

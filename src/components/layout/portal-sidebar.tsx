@@ -8,6 +8,9 @@ import {
   ClipboardCheck,
   Bell,
   ShieldAlert,
+  AlertTriangle,
+  GraduationCap,
+  Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -31,6 +34,21 @@ const portalNavItems = [
     label: "Gefährdungsbeurteilungen",
     href: "/portal/gefaehrdungsbeurteilungen",
     icon: ShieldAlert,
+  },
+  {
+    label: "Schulungen",
+    href: "/portal/schulungen",
+    icon: GraduationCap,
+  },
+  {
+    label: "Vorfälle & Unfälle",
+    href: "/portal/vorfaelle",
+    icon: AlertTriangle,
+  },
+  {
+    label: "Interne Audits",
+    href: "/portal/audits",
+    icon: Search,
   },
   {
     label: "Benachrichtigungen",

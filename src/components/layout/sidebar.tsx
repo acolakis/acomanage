@@ -12,23 +12,40 @@ import {
   Users,
   ShieldAlert,
   Settings,
+  AlertTriangle,
+  ListChecks,
+  Bell,
+  GraduationCap,
+  Target,
+  Scale,
+  Search,
+  BookOpen,
+  Siren,
+  RefreshCw,
+  BarChart3,
+  ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CompanySelector } from "@/components/layout/company-selector";
 
 const navigationItems = [
   {
-    title: "Allgemein",
+    title: "Übersicht",
     items: [
       {
         label: "Dashboard",
         href: "/dashboard",
         icon: LayoutDashboard,
       },
+      {
+        label: "ISO 45001 Status",
+        href: "/iso-dashboard",
+        icon: ShieldCheck,
+      },
     ],
   },
   {
-    title: "Verwaltung",
+    title: "Betriebe & Kontext",
     items: [
       {
         label: "Betriebe",
@@ -36,20 +53,56 @@ const navigationItems = [
         icon: Building2,
       },
       {
+        label: "Benutzer",
+        href: "/benutzer",
+        icon: Users,
+        adminOnly: true,
+      },
+    ],
+  },
+  {
+    title: "Planung",
+    items: [
+      {
+        label: "Gefährdungsbeurteilungen",
+        href: "/gefaehrdungsbeurteilungen",
+        icon: ShieldAlert,
+      },
+      {
+        label: "SGA-Ziele",
+        href: "/ziele",
+        icon: Target,
+      },
+      {
+        label: "Rechtskataster",
+        href: "/rechtskataster",
+        icon: Scale,
+      },
+    ],
+  },
+  {
+    title: "Unterstützung",
+    items: [
+      {
         label: "Dokumente",
         href: "/dokumente",
         icon: FileText,
       },
       {
-        label: "Begehungen",
-        href: "/begehungen",
-        icon: ClipboardCheck,
+        label: "Schulungen",
+        href: "/schulungen",
+        icon: GraduationCap,
       },
     ],
   },
   {
-    title: "Gefahren & Sicherheit",
+    title: "Betrieb",
     items: [
+      {
+        label: "Begehungen",
+        href: "/begehungen",
+        icon: ClipboardCheck,
+      },
       {
         label: "Gefahrstoffe",
         href: "/gefahrstoffe",
@@ -61,9 +114,49 @@ const navigationItems = [
         icon: Cog,
       },
       {
-        label: "Gefährdungsbeurteilungen",
-        href: "/gefaehrdungsbeurteilungen",
-        icon: ShieldAlert,
+        label: "Notfallplanung",
+        href: "/notfallplanung",
+        icon: Siren,
+      },
+      {
+        label: "Änderungsmanagement",
+        href: "/aenderungsmanagement",
+        icon: RefreshCw,
+      },
+    ],
+  },
+  {
+    title: "Bewertung",
+    items: [
+      {
+        label: "Kennzahlen",
+        href: "/kennzahlen",
+        icon: BarChart3,
+      },
+      {
+        label: "Interne Audits",
+        href: "/audits",
+        icon: Search,
+      },
+      {
+        label: "Managementbewertung",
+        href: "/managementbewertung",
+        icon: BookOpen,
+      },
+    ],
+  },
+  {
+    title: "Verbesserung",
+    items: [
+      {
+        label: "Vorfälle & Unfälle",
+        href: "/vorfaelle",
+        icon: AlertTriangle,
+      },
+      {
+        label: "Maßnahmen",
+        href: "/massnahmen",
+        icon: ListChecks,
       },
     ],
   },
@@ -71,9 +164,9 @@ const navigationItems = [
     title: "System",
     items: [
       {
-        label: "Benutzer",
-        href: "/benutzer",
-        icon: Users,
+        label: "Benachrichtigungen",
+        href: "/benachrichtigungen",
+        icon: Bell,
       },
       {
         label: "Einstellungen",

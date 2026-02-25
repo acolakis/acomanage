@@ -68,3 +68,59 @@ export function measureDeadlineEmail(description: string, deadline: string, comp
     `),
   };
 }
+
+export function incidentReportedEmail(incidentNumber: string, incidentType: string, companyName: string): { subject: string; html: string } {
+  return {
+    subject: `Neuer Vorfall gemeldet: ${incidentNumber} — ${companyName}`,
+    html: baseTemplate(`
+      <h2 style="color: #333; font-size: 18px;">Neuer Vorfall gemeldet</h2>
+      <p>Ein neuer Vorfall wurde erfasst:</p>
+      <p><strong>Betrieb:</strong> ${companyName}</p>
+      <p><strong>Vorfallnr.:</strong> ${incidentNumber}</p>
+      <p><strong>Art:</strong> ${incidentType}</p>
+      <p>Bitte prüfen Sie den Vorfall im AcoManage-System.</p>
+    `),
+  };
+}
+
+export function actionDeadlineReminderEmail(actionNumber: string, title: string, deadline: string, companyName: string): { subject: string; html: string } {
+  return {
+    subject: `Maßnahme überfällig: ${actionNumber} — ${companyName}`,
+    html: baseTemplate(`
+      <h2 style="color: #dc2626; font-size: 18px;">Maßnahme überfällig</h2>
+      <p>Die folgende Maßnahme hat ihre Frist überschritten:</p>
+      <p><strong>Betrieb:</strong> ${companyName}</p>
+      <p><strong>Maßnahme:</strong> ${actionNumber} — ${title}</p>
+      <p><strong>Frist:</strong> ${deadline}</p>
+      <p>Bitte stellen Sie die Umsetzung sicher.</p>
+    `),
+  };
+}
+
+export function trainingReminderEmail(trainingTitle: string, dueDate: string, companyName: string): { subject: string; html: string } {
+  return {
+    subject: `Schulung fällig: ${trainingTitle} — ${companyName}`,
+    html: baseTemplate(`
+      <h2 style="color: #f59e0b; font-size: 18px;">Schulung fällig</h2>
+      <p>Die folgende Schulung muss durchgeführt werden:</p>
+      <p><strong>Betrieb:</strong> ${companyName}</p>
+      <p><strong>Schulung:</strong> ${trainingTitle}</p>
+      <p><strong>Fällig bis:</strong> ${dueDate}</p>
+      <p>Bitte planen Sie die Schulung zeitnah ein.</p>
+    `),
+  };
+}
+
+export function trainingCompletedEmail(trainingTitle: string, companyName: string, participantCount: number): { subject: string; html: string } {
+  return {
+    subject: `Schulung durchgeführt: ${trainingTitle} — ${companyName}`,
+    html: baseTemplate(`
+      <h2 style="color: #333; font-size: 18px;">Schulung durchgeführt</h2>
+      <p>Die Schulung wurde erfolgreich durchgeführt:</p>
+      <p><strong>Betrieb:</strong> ${companyName}</p>
+      <p><strong>Schulung:</strong> ${trainingTitle}</p>
+      <p><strong>Teilnehmer:</strong> ${participantCount}</p>
+      <p>Der Unterweisungsnachweis kann im AcoManage-System als PDF heruntergeladen werden.</p>
+    `),
+  };
+}
