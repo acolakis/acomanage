@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-AcoManage is an occupational safety management platform (Arbeitsschutz-Management-Plattform) for safety specialists (FaSi/SIFA) managing 10-50 companies. The entire UI is in German. Route names, error messages, and labels are all German.
+AcoManage is an occupational safety management platform (Arbeitsschutz-Management-Plattform) for safety specialists (FaSi/SIFA) managing 10-50 companies. Built toward ISO 45001 compliance. The entire UI is in German. Route names, error messages, and labels are all German.
 
 ## Commands
 
@@ -21,7 +21,8 @@ npm run db:migrate       # npx prisma migrate dev
 npm run db:seed          # npx tsx prisma/seed.ts
 npm run db:studio        # Prisma Studio GUI
 npm run db:import-templates  # Import document files from external folder (prisma/import-templates.ts)
-npx tsx prisma/seed-inspections.ts  # Seed inspection checklist templates (separate script, no npm alias)
+npx tsx prisma/seed-inspections.ts  # Seed inspection checklist templates (12 industry-specific)
+npx tsx prisma/seed-trainings.ts    # Seed 20 training templates with structured sections
 ```
 
 There are no tests configured. Use `npm run build` as the primary verification step.
@@ -32,7 +33,7 @@ There are no tests configured. Use `npm run build` as the primary verification s
 - **Next.js 14.2** (App Router, Turbopack dev) + TypeScript + Tailwind CSS + shadcn/ui
 - **PostgreSQL 16** + **Prisma ORM v7** with `@prisma/adapter-pg` (adapter pattern)
 - **NextAuth.js v4** (credentials provider, JWT sessions, 30-day expiry)
-- **@react-pdf/renderer** for server-side PDF generation
+- **@react-pdf/renderer** for server-side PDF generation (8 PDF types)
 - **@anthropic-ai/sdk** for Claude API integration (SDS/manual extraction, model: `claude-sonnet-4-6`)
 
 ### Prisma v7 Setup
@@ -40,15 +41,15 @@ Prisma 7 uses an adapter pattern — the database URL is NOT in `schema.prisma` 
 
 ### Route Structure
 
-The app uses two route groups with separate layouts:
+The app uses three route groups with separate layouts:
 - `(dashboard)` — Admin/Employee area with full sidebar navigation (`Sidebar` + `Header`)
 - `(portal)` — Client-only area with simplified sidebar (`PortalSidebar` + `Header`), read-only access
 - `(auth)` — Login page
 
-**German route names** (not English):
+**Dashboard routes** (German names):
 | Route | Purpose |
 |---|---|
-| `/dashboard` | Main overview |
+| `/dashboard` | Main overview with activity, deadlines, company stats |
 | `/betriebe` | Company management (CRUD + `/neu`, `/[id]`, `/[id]/bearbeiten`) |
 | `/benutzer` | User management (admin only, `/neu`, `/[id]`) |
 | `/dokumente` | Document templates & propagation |
@@ -56,28 +57,63 @@ The app uses two route groups with separate layouts:
 | `/gefahrstoffe` | Hazardous substances + AI GBA generation |
 | `/maschinen` | Machine inventory (`/neu`, `/[id]`) |
 | `/gefaehrdungsbeurteilungen` | Risk assessments (GBU, `/neu`, `/[id]`) |
+| `/schulungen` | Trainings & instructions (`/neu`, `/[id]`) |
+| `/vorfaelle` | Incident management (`/neu`, `/[id]`) |
+| `/audits` | Internal audits (`/neu`, `/[id]`) |
+| `/massnahmen` | Corrective actions (Korrekturmaßnahmen) |
+| `/rechtskataster` | Legal requirements register |
+| `/ziele` | Safety objectives & programs (`/neu`, `/[id]`) |
+| `/kennzahlen` | KPI tracking & measurement |
+| `/managementbewertung` | Management reviews (`/neu`, `/[id]`) |
+| `/aenderungsmanagement` | Change management (MoC) |
+| `/notfallplanung` | Emergency plans & drills |
+| `/iso-dashboard` | ISO 45001 compliance overview |
 | `/benachrichtigungen` | Notifications |
 | `/einstellungen` | System settings (admin) |
-| `/portal/*` | Client portal (dokumente, begehungen, gefaehrdungsbeurteilungen, benachrichtigungen) |
+
+**Portal routes** (client read-only access):
+`/portal/{dokumente,begehungen,gefaehrdungsbeurteilungen,schulungen,audits,vorfaelle,benachrichtigungen}`
 
 ### Auth & Roles
 Three roles: `ADMIN`, `EMPLOYEE`, `CLIENT`. Middleware in `src/middleware.ts` redirects CLIENT users to `/portal` and restricts `/benutzer` to ADMIN. Session carries `id`, `email`, `name` (computed), `role`, `companyIds` (see `src/types/next-auth.d.ts`).
 
 ### API Pattern
-API routes live in `src/app/api/`. All require authentication via `getServerSession(authOptions)` except `/api/industries`. Error messages are in German. Key API groups:
-- `/api/companies/[id]` — CRUD + `/categories`, `/templates/[documentId]/download`
+API routes live in `src/app/api/`. All require authentication via `getServerSession(authOptions)` except `/api/industries`. Error messages are in German. ~90 API route files total.
+
+**Core modules:**
+- `/api/companies/[id]` — CRUD + `/categories`, `/templates/[documentId]/download`, `/context` (+ `/pdf`)
 - `/api/documents/[id]` — CRUD + `/assign`, `/propagate`, `/propagate-ba`, `/download`
 - `/api/inspections/[id]` — CRUD + `/findings`, `/pdf`, `/photos`, `/item-checks`
 - `/api/substances/[id]` — CRUD + `/gba` (PDF) + `/adopt-ba`
 - `/api/machines/[id]` — CRUD + `/adopt-ba`
 - `/api/risk-assessments/[id]` — CRUD + `/hazards`, `/pdf`
+
+**ISO 45001 modules:**
+- `/api/trainings/[id]` — CRUD + `/participants` (+ `/[participantId]`), `/pdf`
+- `/api/training-templates` — GET training templates with structured sections
+- `/api/incidents/[id]` — CRUD + `/photos`, `/pdf`
+- `/api/audits/[id]` — CRUD + `/findings`, `/pdf`
+- `/api/corrective-actions/[id]` — CRUD (linked from audits, incidents, inspections)
+- `/api/legal-requirements/[id]` — CRUD (Rechtskataster)
+- `/api/objectives/[id]` — CRUD + `/progress`
+- `/api/kpis` — CRUD + `/values` for time-series data
+- `/api/management-reviews/[id]` — CRUD + `/pdf`
+- `/api/change-requests/[id]` — CRUD (MoC)
+- `/api/emergency-plans/[id]` — CRUD + `/drills`
+- `/api/competence-requirements/[id]` — CRUD
+
+**Utilities:**
 - `/api/notifications` — GET (list + unreadCount), PUT (markRead)
-- `/api/ai/extract-sds` — Claude AI extraction from SDS PDFs
-- `/api/ba-templates` — GET with `?type=substance|machine`, lists IJ03/H01B templates with usage info
-- `/api/export/{companies,inspections,substances,machines,risk-assessments}` — CSV export (UTF-8 BOM + semicolon separator)
+- `/api/ai/extract-sds` + `/api/ai/extract-manual` — Claude AI extraction
+- `/api/ba-templates` — GET with `?type=substance|machine`
+- `/api/export/{companies,inspections,substances,machines,risk-assessments,corrective-actions,audits,legal-requirements,incidents,trainings,management-reviews}` — CSV export
+- `/api/settings` — System settings + `/test-email` + `/export`
+- `/api/audit-log` — Audit trail viewer
 
 ### PDF Generation
-PDF renderers in `src/lib/pdf/*.tsx` export async `render*()` functions that call `renderToBuffer(<JSXComponent />)` and return a `Buffer`. API routes return the buffer as `new NextResponse(new Uint8Array(buffer), { headers: { "Content-Type": "application/pdf" } })`. Three PDF types: inspection reports, GBA (hazardous substance), GBU (risk assessment).
+PDF renderers in `src/lib/pdf/*.tsx` export async `render*()` functions that call `renderToBuffer(<JSXComponent />)` and return a `Buffer`. API routes return the buffer as `new NextResponse(new Uint8Array(buffer), { headers: { "Content-Type": "application/pdf" } })`.
+
+8 PDF types: inspection reports, GBA (hazardous substance), GBU (risk assessment), training reports, audit reports, incident reports, management review reports, SGA policy.
 
 ### AI Integration
 `src/lib/ai/sds-extractor.ts` uses the Anthropic SDK to extract structured data from safety data sheet PDFs via Claude's document processing (base64-encoded PDF → structured JSON). The `CLAUDE_API_KEY` env var is required.
@@ -96,6 +132,9 @@ Used in all Server Component pages to filter data. Returns `{}` when no company 
 
 BA category codes: `IJ03` (Gefahrstoff-Betriebsanweisungen), `H01B` (Maschinen-Betriebsanweisungen). Multiple substances/machines can share one BA document (one-to-many relation).
 
+### Auto-Assign Templates
+`src/lib/auto-assign-templates.ts` — When a company is created with an industry, `autoAssignTemplates()` is called fire-and-forget to automatically assign industry-default document templates via `IndustryDefaultCategory` → `Document` lookup.
+
 ### Settings System
 `src/lib/settings.ts` provides `getSystemSetting<T>(key, default)` and `setSystemSetting(key, value)` for the `SystemSetting` key-value table. Template source data keys: `template_source_company`, `template_source_street`, `template_source_zip`, `template_source_city`, `template_source_geschaeftsfuehrer`, `template_source_produktionsleiter`, `template_source_technischer_leiter`.
 
@@ -112,8 +151,12 @@ Backward-compatible: without `?page=` → full array; with `?page=` → `{ data,
 - **Forms**: react-hook-form + zod validation
 - **Tables**: TanStack React Table v8
 - **UI**: shadcn/ui components in `src/components/ui/`
-- **Feature components**: `src/components/{companies,documents,users,substances,machines}/`
+- **Feature components**: `src/components/{companies,documents,users,substances,machines,inspections,trainings,audits,incidents,corrective-actions,legal,objectives,kpi,management-reviews,changes,emergency,iso-dashboard}/`
 - **Layout**: `src/components/layout/{sidebar,portal-sidebar,header}.tsx`
+- **Dashboard**: `src/components/dashboard/{recent-activity,upcoming-deadlines,company-overview}.tsx`
+
+### Training System
+Training templates (`TrainingTemplate`) have structured sections stored as `Json` field: `{ title: string; content: string; order: number }[]`. The `SectionEditor` component (`src/components/trainings/section-editor.tsx`) provides collapsible section editing with reordering. 20 pre-seeded templates cover all common training types (Brandschutz, Erste Hilfe, Gefahrstoffe, PSA, etc.). Training events (`TrainingEvent`) track participants with attendance and signature tracking.
 
 ## Key Conventions & Gotchas
 
@@ -145,14 +188,20 @@ Radix Select requires a non-empty string value. Use a sentinel like `"__none__"`
 Use `JSON.parse(JSON.stringify(data))` when passing Prisma query results to client components (strips Date objects, Prisma types) and when writing to Prisma `Json` fields (e.g., `SdsExtraction`, `ManualExtraction` models).
 
 ### File Uploads
-Documents are stored in `uploads/documents/{category}/{uuid}_{filename}`. Inspection photos in `uploads/inspections/{inspectionId}/{uuid}.ext`. Multipart form data handling in API routes. The `uploads/` directory is a Docker volume.
+Documents are stored in `uploads/documents/{category}/{uuid}_{filename}`. Inspection photos in `uploads/inspections/{inspectionId}/{uuid}.ext`. Incident photos in `uploads/incidents/{incidentId}/{uuid}.ext`. Multipart form data handling in API routes. The `uploads/` directory is a Docker volume.
 
 ### Notifications & Email
 Fire-and-forget email sending via SMTP config from `SystemSetting` table (`getSmtpConfig()`). Templates in `src/lib/email-templates.ts` (German). Never blocks the main flow.
+
+### Buffer in NextResponse
+Never pass `Buffer` directly to `new NextResponse()` — always wrap with `new Uint8Array(buffer)`. Applies to all PDF routes and CSV export routes.
+
+### Mobile Layout
+Layouts use `h-screen overflow-hidden` on the outer container with `overflow-y-auto` on `<main>` for proper mobile scrolling. Header uses `shrink-0` (not `sticky top-0`).
 
 ## Database
 
 Connection: `postgresql://acomanage:acomanage_secret@localhost:5432/acomanage`
 Admin login: `admin@acomanage.de` / `AcoManage2024!`
 
-The main seed (`prisma/seed.ts`) creates 62 document categories (from real A01–XYZ03 folder structure), 12 industries with 534 default category mappings, and the admin user. Document files are imported from an external folder via `npm run db:import-templates` (`prisma/import-templates.ts`). Inspection checklist templates are seeded separately via `npx tsx prisma/seed-inspections.ts` (12 industry-specific templates with ~400 items total, no npm script alias).
+The main seed (`prisma/seed.ts`) creates 62 document categories (from real A01–XYZ03 folder structure), 12 industries with 534 default category mappings, and the admin user. Document files are imported from an external folder via `npm run db:import-templates` (`prisma/import-templates.ts`). Inspection checklist templates are seeded separately via `npx tsx prisma/seed-inspections.ts` (12 industry-specific templates with ~400 items total). Training templates are seeded via `npx tsx prisma/seed-trainings.ts` (20 templates with 8-12 structured sections each).
