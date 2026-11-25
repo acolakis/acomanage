@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import fs from "fs";
+import { recordUsage } from "@/lib/ai/usage";
 
 const anthropic = new Anthropic({
   apiKey: process.env.CLAUDE_API_KEY || "",
@@ -125,6 +126,7 @@ export async function extractFromManual(
       },
     ],
   });
+  recordUsage({ feature: "manual-extract", model: message.model, usage: message.usage }).catch(() => {});
 
   const textContent = message.content.find((c) => c.type === "text");
   if (!textContent || textContent.type !== "text") {

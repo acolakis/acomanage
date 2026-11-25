@@ -5,22 +5,14 @@ import {
   Text,
   View,
   StyleSheet,
-  Font,
   renderToBuffer,
 } from "@react-pdf/renderer";
-
-Font.register({
-  family: "Helvetica",
-  fonts: [
-    { src: "Helvetica" },
-    { src: "Helvetica-Bold", fontWeight: "bold" },
-    { src: "Helvetica-Oblique", fontStyle: "italic" },
-  ],
-});
+import "@/lib/pdf/shared/fonts";
+import { FONT_FAMILY } from "@/lib/pdf/shared/fonts";
 
 const styles = StyleSheet.create({
   page: {
-    fontFamily: "Helvetica",
+    fontFamily: FONT_FAMILY,
     fontSize: 9,
     paddingTop: 60,
     paddingBottom: 60,
@@ -28,7 +20,7 @@ const styles = StyleSheet.create({
     color: "#1a1a1a",
   },
   coverPage: {
-    fontFamily: "Helvetica",
+    fontFamily: FONT_FAMILY,
     fontSize: 9,
     paddingHorizontal: 40,
     paddingVertical: 60,

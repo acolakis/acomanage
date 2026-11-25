@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import fs from "fs";
+import { recordUsage } from "@/lib/ai/usage";
 
 const anthropic = new Anthropic({
   apiKey: process.env.CLAUDE_API_KEY || "",
@@ -135,6 +136,7 @@ export async function extractFromSds(
       },
     ],
   });
+  recordUsage({ feature: "sds-extract", model: message.model, usage: message.usage }).catch(() => {});
 
   // Extract the text content
   const textContent = message.content.find((c) => c.type === "text");

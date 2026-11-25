@@ -72,6 +72,9 @@ export async function GET(
             id: true,
             inspectionNumber: true,
             inspectionDate: true,
+            itemChecks: {
+              select: { templateItemId: true, status: true, note: true, lastTestDate: true, nextTestDate: true },
+            },
             findings: {
               where: { status: { in: ["OPEN", "IN_PROGRESS", "OVERDUE"] } },
               orderBy: { findingNumber: "asc" },

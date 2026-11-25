@@ -8,8 +8,6 @@ import {
   Loader2,
   Plus,
   CheckCircle2,
-  AlertTriangle,
-  Circle,
   Camera,
   Save,
   FileDown,
@@ -17,8 +15,7 @@ import {
   X,
   ImageIcon,
   Trash2,
-  Ban,
-  Calendar,
+  ClipboardList,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -48,6 +45,17 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
+import {
+  ChecklistItemRow,
+  type CheckPatch,
+  type CheckValues,
+} from "@/components/inspections/checklist-item-row";
+import { QuickEntryDialog } from "@/components/inspections/quick-entry-dialog";
+import { ReportCard } from "@/components/inspections/report-card";
+import {
+  WordExportSummaryDialog,
+  type WordExportSummary,
+} from "@/components/inspections/word-export-summary";
 
 interface TemplateItem {
   id: string;
@@ -107,6 +115,15 @@ interface InspectionData {
   findings: Finding[];
   photos: { id: string; filePath: string; caption: string | null }[];
   itemChecks: ItemCheck[];
+  reportFileName: string | null;
+  reportSource: string | null;
+  reportUpdatedAt: string | null;
+  previousInspection: {
+    id: string;
+    inspectionNumber: string | null;
+    inspectionDate: string;
+    itemChecks: (CheckValues & { templateItemId: string })[];
+  } | null;
 }
 
 const riskLevelOptions = [
@@ -138,6 +155,9 @@ export default function BegehungDetailPage() {
   const [findingDialogOpen, setFindingDialogOpen] = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [docxLoading, setDocxLoading] = useState(false);
+  const [docxSeconds, setDocxSeconds] = useState(0);
+  const [docxSummary, setDocxSummary] = useState<WordExportSummary | null>(null);
   const [lightboxPhoto, setLightboxPhoto] = useState<string | null>(null);
   const [findingSaving, setFindingSaving] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -145,9 +165,9 @@ export default function BegehungDetailPage() {
   // Pending photos for finding dialog
   const [pendingPhotos, setPendingPhotos] = useState<File[]>([]);
 
-  // Test date editing state: templateItemId -> { lastTestDate, nextTestDate }
-  const [testDateEditing, setTestDateEditing] = useState<Record<string, boolean>>({});
-  const [testDates, setTestDates] = useState<Record<string, { lastTestDate: string; nextTestDate: string }>>({});
+  const [filter, setFilter] = useState<"all" | "open" | "mangel">("all");
+  const [quickEntryOpen, setQuickEntryOpen] = useState(false);
+  const [quickEntrySummary, setQuickEntrySummary] = useState<string | null>(null);
 
   // New finding form state
   const [newFinding, setNewFinding] = useState({
@@ -166,17 +186,6 @@ export default function BegehungDetailPage() {
       if (!res.ok) throw new Error("Nicht gefunden");
       const data = await res.json();
       setInspection(data);
-      // Initialize test dates from existing data
-      const dates: Record<string, { lastTestDate: string; nextTestDate: string }> = {};
-      for (const ic of data.itemChecks || []) {
-        if (ic.lastTestDate || ic.nextTestDate) {
-          dates[ic.templateItemId] = {
-            lastTestDate: ic.lastTestDate ? ic.lastTestDate.slice(0, 10) : "",
-            nextTestDate: ic.nextTestDate ? ic.nextTestDate.slice(0, 10) : "",
-          };
-        }
-      }
-      setTestDates(dates);
     } catch {
       router.push("/begehungen");
     } finally {
@@ -234,51 +243,49 @@ export default function BegehungDetailPage() {
     }
   };
 
-  const handleItemCheck = async (
-    templateItemId: string,
-    status: "IO" | "MANGEL" | "NICHT_RELEVANT",
-    lastTestDate?: string,
-    nextTestDate?: string,
-  ) => {
+  // Saves one checklist line. The server may turn JA into NEIN (overdue test date) and add a finding.
+  const saveCheck = async (templateItemId: string, patch: CheckPatch) => {
+    const current = inspection?.itemChecks.find((ic) => ic.templateItemId === templateItemId);
+    const status = patch.status ?? current?.status ?? "UNCHECKED";
+    // Leaving NEIN with findings attached: they would stay in the report, so ask to remove them
+    let removeFindings = false;
+    const itemKey = inspection?.template?.sections.flatMap((s) => s.items).find((i) => i.id === templateItemId)?.itemKey;
+    const itemFindingCount = inspection?.findings.filter((f) => itemKey && f.templateItem?.itemKey === itemKey).length ?? 0;
+    if (patch.status && patch.status !== "MANGEL" && current?.status === "MANGEL" && itemFindingCount > 0) {
+      if (
+        !confirm(
+          `Mangel behoben? ${itemFindingCount === 1 ? "Der Befund" : `Die ${itemFindingCount} Befunde`} zu diesem Punkt ${itemFindingCount === 1 ? "wird" : "werden"} gelöscht.`
+        )
+      )
+        return;
+      removeFindings = true;
+    }
     try {
-      await fetch(`/api/inspections/${params.id}/item-checks`, {
+      const res = await fetch(`/api/inspections/${params.id}/item-checks`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          templateItemId,
-          status,
-          ...(lastTestDate !== undefined && { lastTestDate }),
-          ...(nextTestDate !== undefined && { nextTestDate }),
-        }),
+        body: JSON.stringify({ templateItemId, ...patch, status, removeFindings }),
       });
-      fetchInspection();
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Fehler beim Speichern");
+        return;
+      }
+      if (data.findingCreated || data.removedFindings) {
+        fetchInspection();
+        return;
+      }
+      setInspection((prev) => {
+        if (!prev) return prev;
+        const rest = prev.itemChecks.filter((ic) => ic.templateItemId !== templateItemId);
+        return { ...prev, itemChecks: [...rest, data] };
+      });
     } catch (error) {
       console.error("Error saving item check:", error);
+      alert("Fehler beim Speichern");
     }
   };
 
-  const handleSaveTestDates = async (templateItemId: string) => {
-    const dates = testDates[templateItemId];
-    if (!dates) return;
-    const check = itemCheckMap.get(templateItemId);
-    const currentStatus = check?.status || "IO";
-    try {
-      await fetch(`/api/inspections/${params.id}/item-checks`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          templateItemId,
-          status: currentStatus === "UNCHECKED" ? "IO" : currentStatus,
-          lastTestDate: dates.lastTestDate || null,
-          nextTestDate: dates.nextTestDate || null,
-        }),
-      });
-      setTestDateEditing((prev) => ({ ...prev, [templateItemId]: false }));
-      fetchInspection();
-    } catch (error) {
-      console.error("Error saving test dates:", error);
-    }
-  };
 
   const handlePhotoUpload = async (
     e: React.ChangeEvent<HTMLInputElement>,
@@ -373,6 +380,49 @@ export default function BegehungDetailPage() {
     }
   };
 
+  // Word export runs as a background job on the server (takes minutes); poll until done.
+  const handleDownloadDocx = async () => {
+    setDocxLoading(true);
+    setDocxSeconds(0);
+    try {
+      const start = await fetch(`/api/inspections/${params.id}/docx`, { method: "POST" });
+      const started = await start.json().catch(() => null);
+      if (!start.ok || !started?.jobId) throw new Error(started?.error || `Fehler ${start.status}`);
+      const jobUrl = `/api/inspections/${params.id}/docx?job=${started.jobId}`;
+      let failures = 0;
+      for (;;) {
+        await new Promise((r) => setTimeout(r, 3000));
+        let job;
+        try {
+          const res = await fetch(jobUrl, { cache: "no-store" });
+          job = await res.json();
+          if (!res.ok) throw new Error(job?.error || `Fehler ${res.status}`);
+          failures = 0;
+        } catch (err) {
+          if (++failures >= 5) throw err;
+          continue;
+        }
+        if (job.status === "running") {
+          setDocxSeconds(job.seconds);
+          continue;
+        }
+        if (job.status === "error") throw new Error(job.error);
+        const a = document.createElement("a");
+        a.href = `${jobUrl}&download=1`;
+        a.download = job.filename || "Begehungsbericht.docx";
+        a.click();
+        setDocxSummary(job.summary);
+        fetchInspection();
+        break;
+      }
+    } catch (error) {
+      console.error("Error generating DOCX:", error);
+      alert(`Fehler beim Erstellen des Word-Berichts: ${error instanceof Error ? error.message : error}`);
+    } finally {
+      setDocxLoading(false);
+    }
+  };
+
   const openFindingForItem = (sectionId: string, item: TemplateItem) => {
     setNewFinding({
       sectionId,
@@ -404,6 +454,16 @@ export default function BegehungDetailPage() {
   for (const ic of inspection.itemChecks || []) {
     itemCheckMap.set(ic.templateItemId, ic);
   }
+  const previousCheckMap = new Map<string, CheckValues>();
+  for (const ic of inspection.previousInspection?.itemChecks || []) {
+    previousCheckMap.set(ic.templateItemId, ic);
+  }
+  const matchesFilter = (item: TemplateItem) => {
+    const st = itemCheckMap.get(item.id)?.status ?? "UNCHECKED";
+    if (filter === "open") return st === "UNCHECKED";
+    if (filter === "mangel") return st === "MANGEL";
+    return true;
+  };
 
   // Group findings by template item
   const findingsByItemKey: Record<string, Finding[]> = {};
@@ -428,6 +488,8 @@ export default function BegehungDetailPage() {
   const checkedItems = (inspection.itemChecks || []).filter(
     (ic) => ic.status === "IO" || ic.status === "MANGEL"
   ).length;
+  const mangelItems = (inspection.itemChecks || []).filter((ic) => ic.status === "MANGEL").length;
+  const openItems = totalItems - nichtRelevantItems - checkedItems;
   const progressPercent = relevantItems > 0 ? Math.round((checkedItems / relevantItems) * 100) : 0;
 
   const PhotoThumbnail = ({
@@ -513,6 +575,23 @@ export default function BegehungDetailPage() {
           )}
           <Button
             variant="outline"
+            onClick={handleDownloadDocx}
+            disabled={docxLoading}
+          >
+            {docxLoading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Bericht wird abgeglichen… {Math.floor(docxSeconds / 60)}:{String(docxSeconds % 60).padStart(2, "0")}
+              </>
+            ) : (
+              <>
+                <FileDown className="mr-2 h-4 w-4" />
+                Word
+              </>
+            )}
+          </Button>
+          <Button
+            variant="outline"
             onClick={handleDownloadPdf}
             disabled={pdfLoading}
           >
@@ -578,6 +657,15 @@ export default function BegehungDetailPage() {
         </Card>
       </div>
 
+      <ReportCard
+        inspectionId={inspection.id}
+        fileName={inspection.reportFileName}
+        source={inspection.reportSource}
+        updatedAt={inspection.reportUpdatedAt}
+        canEdit
+        onChanged={fetchInspection}
+      />
+
       {/* Progress bar */}
       {totalItems > 0 && (
         <div className="space-y-1">
@@ -605,8 +693,51 @@ export default function BegehungDetailPage() {
         </TabsList>
 
         <TabsContent value="checklist" className="space-y-4 mt-4">
+          <div className="flex flex-wrap items-center gap-2">
+            {(
+              [
+                ["all", `Alle (${totalItems})`],
+                ["open", `Offen (${openItems})`],
+                ["mangel", `Mängel (${mangelItems})`],
+              ] as const
+            ).map(([value, label]) => (
+              <Button
+                key={value}
+                size="sm"
+                variant={filter === value ? "default" : "outline"}
+                className="h-9"
+                onClick={() => setFilter(value)}
+              >
+                {label}
+              </Button>
+            ))}
+            {isEditable && (
+              <Button size="sm" variant="secondary" className="h-9" onClick={() => setQuickEntryOpen(true)}>
+                <ClipboardList className="mr-2 h-4 w-4" />
+                Schnellerfassung Prüfdaten
+              </Button>
+            )}
+            {inspection.previousInspection && (
+              <span className="text-xs text-muted-foreground sm:ml-auto">
+                Vorbelegt aus {inspection.previousInspection.inspectionNumber || "letzter Begehung"} vom{" "}
+                {new Date(inspection.previousInspection.inspectionDate).toLocaleDateString("de-DE")}: alle Antworten
+                und Befunde übernommen, nur Änderungen antippen.
+              </span>
+            )}
+          </div>
+
+          {quickEntrySummary && (
+            <div className="flex items-center justify-between rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900 dark:bg-blue-950/20 dark:text-blue-200">
+              <span>Schnellerfassung: {quickEntrySummary}</span>
+              <button onClick={() => setQuickEntrySummary(null)} aria-label="Hinweis schließen">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+
           {sections.map((section) => {
             const sectionItems = section.items;
+            if (filter !== "all" && !sectionItems.some(matchesFilter)) return null;
             const sectionNR = sectionItems.filter((item) => {
               const check = itemCheckMap.get(item.id);
               return check?.status === "NICHT_RELEVANT";
@@ -640,238 +771,53 @@ export default function BegehungDetailPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-2">
-                    {sectionItems.map((item) => {
-                      const check = itemCheckMap.get(item.id);
-                      const checkStatus = check?.status || "UNCHECKED";
-                      const itemFindings =
-                        findingsByItemKey[item.itemKey] || [];
-                      const isNR = checkStatus === "NICHT_RELEVANT";
-                      const showTestDates = testDateEditing[item.id];
-                      const currentTestDates = testDates[item.id] || { lastTestDate: "", nextTestDate: "" };
-
+                    {sectionItems.filter(matchesFilter).map((item) => {
+                      const itemFindings = findingsByItemKey[item.itemKey] || [];
                       return (
-                        <div
+                        <ChecklistItemRow
                           key={item.id}
-                          className={`rounded-md border p-3 ${
-                            isNR
-                              ? "border-gray-200 bg-gray-50 opacity-60 dark:bg-gray-950/20"
-                              : checkStatus === "IO"
-                              ? "border-green-300 bg-green-50 dark:bg-green-950/20"
-                              : checkStatus === "MANGEL"
-                              ? "border-yellow-300 bg-yellow-50 dark:bg-yellow-950/20"
-                              : ""
-                          }`}
+                          item={item}
+                          check={itemCheckMap.get(item.id)}
+                          previous={previousCheckMap.get(item.id)}
+                          inspectionDate={inspection.inspectionDate}
+                          isEditable={isEditable}
+                          findingCount={itemFindings.length}
+                          onSave={(patch) => saveCheck(item.id, patch)}
+                          onNein={async () => {
+                            await saveCheck(item.id, { status: "MANGEL" });
+                            if (itemFindings.length === 0) openFindingForItem(section.id, item);
+                          }}
+                          onAddFinding={() => openFindingForItem(section.id, item)}
                         >
-                          <div className="flex items-start gap-3">
-                            <div className="mt-0.5">
-                              {isNR ? (
-                                <Ban className="h-5 w-5 text-gray-400" />
-                              ) : checkStatus === "IO" ? (
-                                <CheckCircle2 className="h-5 w-5 text-green-600" />
-                              ) : checkStatus === "MANGEL" ? (
-                                <AlertTriangle className="h-5 w-5 text-yellow-600" />
-                              ) : (
-                                <Circle className="h-5 w-5 text-muted-foreground/40" />
-                              )}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className={`text-sm font-medium ${isNR ? "line-through text-muted-foreground" : ""}`}>
-                                {item.label}
-                              </p>
-                              {item.legalReference && !isNR && (
-                                <p className="text-xs text-muted-foreground">
-                                  {item.legalReference}
-                                </p>
-                              )}
-                              {/* Existing findings for this item */}
-                              {!isNR && itemFindings.map((f) => (
-                                <div
-                                  key={f.id}
-                                  className="mt-2 text-sm border-l-2 border-yellow-400 pl-3"
-                                >
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-xs font-medium text-yellow-700">#{f.findingNumber}</span>
-                                    <p className="flex-1">{f.description}</p>
-                                  </div>
-                                  {f.measure && (
-                                    <p className="text-xs text-muted-foreground mt-1">
-                                      Maßnahme: {f.measure}
-                                    </p>
-                                  )}
-                                  {f.riskLevel && (
-                                    <Badge
-                                      variant="outline"
-                                      className="text-xs mt-1"
-                                    >
-                                      {f.riskLevel}
-                                    </Badge>
-                                  )}
-                                  {/* Photos inline */}
-                                  {f.photos.length > 0 && (
-                                    <div className="flex flex-wrap gap-1 mt-1">
-                                      {f.photos.map((photo) => (
-                                        <PhotoThumbnail
-                                          key={photo.id}
-                                          photo={photo}
-                                          onDelete={() => handlePhotoDelete(photo.id)}
-                                          size="sm"
-                                        />
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-                              ))}
-                              {/* "Add another finding" link for items with existing findings */}
-                              {!isNR && isEditable && checkStatus === "MANGEL" && itemFindings.length > 0 && (
-                                <button
-                                  onClick={() => openFindingForItem(section.id, item)}
-                                  className="mt-2 text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1"
-                                >
-                                  <Plus className="h-3 w-3" />
-                                  Weiteren Befund hinzufügen
-                                </button>
-                              )}
-                              {/* Test date display/edit */}
-                              {!isNR && (checkStatus === "IO" || checkStatus === "MANGEL") && (
-                                <div className="mt-2">
-                                  {!showTestDates && (check?.lastTestDate || check?.nextTestDate) && (
-                                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                      <Calendar className="h-3 w-3" />
-                                      {check.lastTestDate && (
-                                        <span>Letzte: {new Date(check.lastTestDate).toLocaleDateString("de-DE")}</span>
-                                      )}
-                                      {check.nextTestDate && (
-                                        <span>Nächste: {new Date(check.nextTestDate).toLocaleDateString("de-DE")}</span>
-                                      )}
-                                      {isEditable && (
-                                        <button
-                                          onClick={() => setTestDateEditing((prev) => ({ ...prev, [item.id]: true }))}
-                                          className="text-blue-600 hover:text-blue-800 ml-1"
-                                        >
-                                          Bearbeiten
-                                        </button>
-                                      )}
-                                    </div>
-                                  )}
-                                  {!showTestDates && !check?.lastTestDate && !check?.nextTestDate && isEditable && (
-                                    <button
-                                      onClick={() => {
-                                        setTestDates((prev) => ({
-                                          ...prev,
-                                          [item.id]: prev[item.id] || { lastTestDate: "", nextTestDate: "" },
-                                        }));
-                                        setTestDateEditing((prev) => ({ ...prev, [item.id]: true }));
-                                      }}
-                                      className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
-                                    >
-                                      <Calendar className="h-3 w-3" />
-                                      Prüfdatum
-                                    </button>
-                                  )}
-                                  {showTestDates && isEditable && (
-                                    <div className="flex items-end gap-2 mt-1">
-                                      <div className="space-y-1">
-                                        <label className="text-xs text-muted-foreground">Letzte Prüfung</label>
-                                        <Input
-                                          type="date"
-                                          className="h-7 text-xs w-36"
-                                          value={currentTestDates.lastTestDate}
-                                          onChange={(e) =>
-                                            setTestDates((prev) => ({
-                                              ...prev,
-                                              [item.id]: { ...prev[item.id], lastTestDate: e.target.value },
-                                            }))
-                                          }
-                                        />
-                                      </div>
-                                      <div className="space-y-1">
-                                        <label className="text-xs text-muted-foreground">Nächste Prüfung</label>
-                                        <Input
-                                          type="date"
-                                          className="h-7 text-xs w-36"
-                                          value={currentTestDates.nextTestDate}
-                                          onChange={(e) =>
-                                            setTestDates((prev) => ({
-                                              ...prev,
-                                              [item.id]: { ...prev[item.id], nextTestDate: e.target.value },
-                                            }))
-                                          }
-                                        />
-                                      </div>
-                                      <Button
-                                        size="sm"
-                                        className="h-7 text-xs"
-                                        onClick={() => handleSaveTestDates(item.id)}
-                                      >
-                                        Speichern
-                                      </Button>
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-7 text-xs"
-                                        onClick={() => setTestDateEditing((prev) => ({ ...prev, [item.id]: false }))}
-                                      >
-                                        Abbrechen
-                                      </Button>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                            {isEditable && (
-                              <div className="flex gap-1 shrink-0">
-                                <Button
-                                  variant={
-                                    checkStatus === "IO" ? "default" : "outline"
-                                  }
-                                  size="sm"
-                                  className={`h-8 px-2 text-xs ${
-                                    checkStatus === "IO"
-                                      ? "bg-green-600 hover:bg-green-700"
-                                      : ""
-                                  }`}
-                                  onClick={() => handleItemCheck(item.id, "IO")}
-                                >
-                                  <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-                                  i.O.
-                                </Button>
-                                <Button
-                                  variant={
-                                    checkStatus === "MANGEL"
-                                      ? "default"
-                                      : "outline"
-                                  }
-                                  size="sm"
-                                  className={`h-8 px-2 text-xs ${
-                                    checkStatus === "MANGEL"
-                                      ? "bg-yellow-600 hover:bg-yellow-700"
-                                      : ""
-                                  }`}
-                                  onClick={() => {
-                                    handleItemCheck(item.id, "MANGEL");
-                                    openFindingForItem(section.id, item);
-                                  }}
-                                >
-                                  <AlertTriangle className="h-3.5 w-3.5 mr-1" />
-                                  Mangel
-                                </Button>
-                                <Button
-                                  variant={isNR ? "default" : "outline"}
-                                  size="sm"
-                                  className={`h-8 px-2 text-xs ${
-                                    isNR
-                                      ? "bg-gray-500 hover:bg-gray-600"
-                                      : ""
-                                  }`}
-                                  onClick={() => handleItemCheck(item.id, "NICHT_RELEVANT")}
-                                >
-                                  <Ban className="h-3.5 w-3.5 mr-1" />
-                                  N/R
-                                </Button>
+                          {itemFindings.map((f) => (
+                            <div key={f.id} className="mt-2 text-sm border-l-2 border-yellow-400 pl-3">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-medium text-yellow-700">#{f.findingNumber}</span>
+                                <p className="flex-1">{f.description}</p>
                               </div>
-                            )}
-                          </div>
-                        </div>
+                              {f.measure && (
+                                <p className="text-xs text-muted-foreground mt-1">Maßnahme: {f.measure}</p>
+                              )}
+                              {f.riskLevel && (
+                                <Badge variant="outline" className="text-xs mt-1">
+                                  {f.riskLevel}
+                                </Badge>
+                              )}
+                              {f.photos.length > 0 && (
+                                <div className="flex flex-wrap gap-1 mt-1">
+                                  {f.photos.map((photo) => (
+                                    <PhotoThumbnail
+                                      key={photo.id}
+                                      photo={photo}
+                                      onDelete={() => handlePhotoDelete(photo.id)}
+                                      size="sm"
+                                    />
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </ChecklistItemRow>
                       );
                     })}
                   </div>
@@ -1279,6 +1225,24 @@ export default function BegehungDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {isEditable && (
+        <QuickEntryDialog
+          open={quickEntryOpen}
+          onOpenChange={setQuickEntryOpen}
+          inspectionId={inspection.id}
+          inspectionDate={inspection.inspectionDate}
+          generalNotes={inspection.generalNotes}
+          items={sections.flatMap((s) => s.items)}
+          statuses={Object.fromEntries(inspection.itemChecks.map((ic) => [ic.templateItemId, ic.status]))}
+          onDone={(summary) => {
+            setQuickEntrySummary(summary);
+            fetchInspection();
+          }}
+        />
+      )}
+
+      <WordExportSummaryDialog summary={docxSummary} onClose={() => setDocxSummary(null)} />
 
       {/* Photo Lightbox */}
       <Dialog

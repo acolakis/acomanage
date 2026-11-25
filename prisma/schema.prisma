@@ -66,6 +66,8 @@ model User {
   requestedChanges      ChangeRequest[]    @relation("ChangeRequestedBy")
   approvedChanges       ChangeRequest[]    @relation("ChangeApprovedBy")
   recordedKpiValues     KpiValue[]         @relation("KpiRecordedBy")
+  createdDigitalDocuments DigitalDocument[] @relation("DigitalDocumentCreatedBy")
+  createdUnterweisungen   Unterweisung[]    @relation("UnterweisungCreatedBy")
 
   @@map("users")
 }
@@ -186,6 +188,8 @@ model Company {
   emergencyPlans      EmergencyPlan[]
   changeRequests      ChangeRequest[]
   kpiValues           KpiValue[]
+  digitalDocuments    DigitalDocument[]
+  unterweisungen      Unterweisung[]
 
   @@map("companies")
 }
@@ -409,6 +413,12 @@ model Inspection {
   status                InspectionStatus @default(DRAFT)
   completedAt           DateTime?        @map("completed_at")
   pdfPath               String?          @map("pdf_path")
+  /// Word report of this inspection (uploads/inspections/<id>/…docx); basis for next year's export
+  reportPath            String?          @map("report_path")
+  reportFileName        String?          @map("report_file_name")
+  /// "generated" (Word export) or "uploaded" (final version edited in Word)
+  reportSource          String?          @map("report_source")
+  reportUpdatedAt       DateTime?        @map("report_updated_at")
   createdAt             DateTime         @default(now()) @map("created_at")
   updatedAt             DateTime         @updatedAt @map("updated_at")
 
@@ -1343,4 +1353,79 @@ model AuditLog {
   user User? @relation(fields: [userId], references: [id])
 
   @@map("audit_log")
+}
+
+// ============================================================
+// DIGITAL DOCUMENTS
+// ============================================================
+
+model DigitalDocument {
+  id           String   @id @default(uuid())
+  categoryCode String   @map("category_code")
+  companyId    String   @map("company_id")
+  title        String
+  formData     Json     @map("form_data")
+  status       String   @default("active")
+  validFrom    DateTime? @map("valid_from")
+  validUntil   DateTime? @map("valid_until")
+  version      Int      @default(1)
+  createdById  String   @map("created_by")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  company   Company @relation(fields: [companyId], references: [id])
+  createdBy User    @relation("DigitalDocumentCreatedBy", fields: [createdById], references: [id])
+
+  @@index([companyId])
+  @@index([categoryCode])
+  @@map("digital_documents")
+}
+
+model Unterweisung {
+  id               String   @id @default(uuid())
+  companyId        String   @map("company_id")
+  abteilung        String?
+  ort              String?
+  datum            DateTime @db.Date
+  zeitVon          String?  @map("zeit_von")
+  zeitBis          String?  @map("zeit_bis")
+  anlass           String[]
+  inhalt           String
+  naechsterTermin  String?  @map("naechster_termin")
+  teilnehmerAnzahl Int?     @default(10) @map("teilnehmer_anzahl")
+  status           String   @default("entwurf")
+  createdById      String?  @map("created_by")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  company   Company @relation(fields: [companyId], references: [id])
+  createdBy User?   @relation("UnterweisungCreatedBy", fields: [createdById], references: [id])
+
+  @@index([companyId])
+  @@map("unterweisungen")
+}
+
+// ============================================================
+// AI USAGE (cost tracking per Claude API call)
+// ============================================================
+
+model AiUsage {
+  id               String   @id @default(uuid())
+  /// import-transcribe | import-analyze | word-export | word-dedupe | sds-extract | manual-extract | inspection-doc-extract
+  feature          String
+  model            String
+  inspectionId     String?  @map("inspection_id")
+  companyId        String?  @map("company_id")
+  /// groups the calls of one run (e.g. one Word export or one import)
+  runId            String?  @map("run_id")
+  inputTokens      Int      @map("input_tokens")
+  outputTokens     Int      @map("output_tokens")
+  cacheReadTokens  Int      @default(0) @map("cache_read_tokens")
+  cacheWriteTokens Int      @default(0) @map("cache_write_tokens")
+  costUsd          Float    @map("cost_usd")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@index([feature])
+  @@map("ai_usage")
 }

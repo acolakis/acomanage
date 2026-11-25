@@ -7,10 +7,12 @@ import {
   StyleSheet,
   renderToBuffer,
 } from "@react-pdf/renderer";
+import "@/lib/pdf/shared/fonts";
+import { FONT_FAMILY } from "@/lib/pdf/shared/fonts";
 
 const styles = StyleSheet.create({
   page: {
-    fontFamily: "Helvetica",
+    fontFamily: FONT_FAMILY,
     fontSize: 9,
     paddingTop: 60,
     paddingBottom: 60,

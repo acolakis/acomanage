@@ -7,6 +7,8 @@ import {
   StyleSheet,
   renderToBuffer,
 } from "@react-pdf/renderer";
+import "@/lib/pdf/shared/fonts";
+import { FONT_FAMILY } from "@/lib/pdf/shared/fonts";
 
 const colors = {
   orange: "#f97316",
@@ -23,7 +25,7 @@ const colors = {
 
 const styles = StyleSheet.create({
   page: {
-    fontFamily: "Helvetica",
+    fontFamily: FONT_FAMILY,
     fontSize: 9,
     padding: 0,
     color: colors.black,

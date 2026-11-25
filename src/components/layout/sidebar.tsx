@@ -24,6 +24,7 @@ import {
   RefreshCw,
   BarChart3,
   ShieldCheck,
+  ClipboardPen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CompanySelector } from "@/components/layout/company-selector";
@@ -92,6 +93,11 @@ const navigationItems = [
         label: "Schulungen",
         href: "/schulungen",
         icon: GraduationCap,
+      },
+      {
+        label: "Unterweisungen",
+        href: "/unterweisungsnachweise",
+        icon: ClipboardPen,
       },
     ],
   },

@@ -75,8 +75,8 @@ export function Header() {
             <span className="sr-only">Menü öffnen</span>
           </Button>
         </SheetTrigger>
-        <SheetContent side="left" className="w-64 p-0">
-          <SheetHeader className="border-b px-6 py-4">
+        <SheetContent side="left" className="flex h-full w-64 flex-col overflow-hidden p-0">
+          <SheetHeader className="shrink-0 border-b px-6 py-4">
             <SheetTitle>
               <Link
                 href={isPortal ? "/portal" : "/dashboard"}
@@ -94,7 +94,7 @@ export function Header() {
               </Link>
             </SheetTitle>
           </SheetHeader>
-          <div onClick={() => setMobileOpen(false)}>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" onClick={() => setMobileOpen(false)}>
             <SidebarNav />
           </div>
         </SheetContent>

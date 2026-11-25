@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getSelectedCompanyId } from "@/lib/company-filter";
-import { DocumentList } from "@/components/documents/document-list";
+import { DokumentePageContent } from "@/components/documents/dokumente-page-content";
 
 async function getDocuments() {
   try {
@@ -41,16 +41,38 @@ async function getCategories() {
   }
 }
 
+async function getDigitalDocuments() {
+  try {
+    const selectedCompanyId = getSelectedCompanyId();
+    const documents = await prisma.digitalDocument.findMany({
+      where: {
+        status: { not: "archived" },
+        ...(selectedCompanyId ? { companyId: selectedCompanyId } : {}),
+      },
+      include: {
+        company: { select: { id: true, name: true } },
+        createdBy: { select: { firstName: true, lastName: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    return documents;
+  } catch {
+    return [];
+  }
+}
+
 export default async function DokumentePage() {
-  const [documents, categories] = await Promise.all([
+  const [documents, categories, digitalDocuments] = await Promise.all([
     getDocuments(),
     getCategories(),
+    getDigitalDocuments(),
   ]);
 
   return (
-    <DocumentList
-      data={JSON.parse(JSON.stringify(documents))}
+    <DokumentePageContent
+      documents={JSON.parse(JSON.stringify(documents))}
       categories={JSON.parse(JSON.stringify(categories))}
+      digitalDocuments={JSON.parse(JSON.stringify(digitalDocuments))}
     />
   );
 }

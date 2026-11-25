@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus, ClipboardCheck, Calendar, AlertTriangle } from "lucide-react";
+import { Plus, ClipboardCheck, Calendar, AlertTriangle, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -48,12 +48,26 @@ export default async function BegehungenPage() {
             {inspections.length} Begehungen insgesamt
           </p>
         </div>
-        <Button asChild>
-          <Link href="/begehungen/neu">
-            <Plus className="mr-2 h-4 w-4" />
-            Neue Begehung
-          </Link>
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" asChild>
+            <Link href="/begehungen/import-alt">
+              <Upload className="mr-2 h-4 w-4" />
+              Alten Bericht importieren
+            </Link>
+          </Button>
+          <Button variant="outline" asChild>
+            <Link href="/begehungen/import">
+              <Upload className="mr-2 h-4 w-4" />
+              GoodNotes importieren
+            </Link>
+          </Button>
+          <Button asChild>
+            <Link href="/begehungen/neu">
+              <Plus className="mr-2 h-4 w-4" />
+              Neue Begehung
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}

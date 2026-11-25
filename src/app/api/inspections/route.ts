@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { logAudit } from "@/lib/audit";
 import { getCompanyFilter } from "@/lib/access-control";
 import { parsePaginationParams, paginatedResponse } from "@/lib/pagination";
+import { applyOverdueRule, findPreviousInspection, prefillChecks, prefillFindings } from "@/lib/inspection-prefill";
 
 // GET /api/inspections - List all inspections
 export async function GET(request: NextRequest) {
@@ -71,6 +72,7 @@ export async function POST(request: NextRequest) {
       previousInspectionId,
       attendees,
       generalNotes,
+      prefill = true,
     } = body;
 
     if (!companyId || !inspectionType || !inspectionDate) {
@@ -92,6 +94,12 @@ export async function POST(request: NextRequest) {
     });
     const inspectionNumber = `BEG-${year}-${String(count + 1).padStart(3, "0")}`;
 
+    // Carry names, remarks and test dates over from the last inspection with the same checklist
+    const previous =
+      templateId && prefill
+        ? await findPreviousInspection({ companyId, templateId, before: new Date(inspectionDate) })
+        : null;
+
     const inspection = await prisma.inspection.create({
       data: {
         companyId,
@@ -99,7 +107,7 @@ export async function POST(request: NextRequest) {
         inspectionNumber,
         inspectionDate: new Date(inspectionDate),
         inspectionType,
-        previousInspectionId: previousInspectionId || null,
+        previousInspectionId: previousInspectionId || previous?.id || null,
         inspectorId: session.user.id,
         attendees: attendees || null,
         generalNotes: generalNotes || null,
@@ -110,9 +118,18 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    logAudit({ userId: session.user.id, action: "create", entityType: "inspection", entityId: inspection.id, details: { number: inspectionNumber } });
+    let prefilledCount = 0;
+    let overdueCount = 0;
+    if (previous) {
+      const result = await prisma.inspectionItemCheck.createMany({ data: prefillChecks(previous, inspection.id) });
+      prefilledCount = result.count;
+      await prisma.inspectionFinding.createMany({ data: prefillFindings(previous, inspection.id) });
+      overdueCount = await applyOverdueRule(inspection.id, new Date(inspectionDate));
+    }
 
-    return NextResponse.json(inspection, { status: 201 });
+    logAudit({ userId: session.user.id, action: "create", entityType: "inspection", entityId: inspection.id, details: { number: inspectionNumber, prefilledFrom: previous?.id ?? null } });
+
+    return NextResponse.json({ ...inspection, prefilledCount, overdueCount }, { status: 201 });
   } catch (error) {
     console.error("Error creating inspection:", error);
     return NextResponse.json(

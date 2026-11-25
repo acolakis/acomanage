@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { logAudit } from "@/lib/audit";
 import { parsePaginationParams, paginatedResponse } from "@/lib/pagination";
 import { autoAssignTemplates } from "@/lib/auto-assign-templates";
+import { autoCreateDigitalDocuments } from "@/lib/auto-create-digital-documents";
 
 // GET /api/companies - List all companies with optional filters
 export async function GET(request: NextRequest) {
@@ -123,6 +124,9 @@ export async function POST(request: NextRequest) {
     if (company.industryId) {
       autoAssignTemplates(company.id, company.industryId, session.user.id).catch(console.error);
     }
+
+    // Auto-create all digital documents as drafts
+    autoCreateDigitalDocuments(company.id, company.name, session.user.id).catch(console.error);
 
     return NextResponse.json(company, { status: 201 });
   } catch (error) {

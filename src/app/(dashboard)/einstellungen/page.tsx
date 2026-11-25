@@ -4,6 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { GeneralSettings } from "@/components/settings/general-settings";
 import { SmtpSettings } from "@/components/settings/smtp-settings";
 import { AiSettings } from "@/components/settings/ai-settings";
+import { AiUsageCard } from "@/components/settings/ai-usage-card";
 import { BackupSettings } from "@/components/settings/backup-settings";
 import { TemplateSettings } from "@/components/settings/template-settings";
 
@@ -34,7 +35,8 @@ export default function EinstellungenPage() {
           <SmtpSettings />
         </TabsContent>
 
-        <TabsContent value="ai" className="mt-4">
+        <TabsContent value="ai" className="mt-4 space-y-4">
+          <AiUsageCard />
           <AiSettings />
         </TabsContent>
 

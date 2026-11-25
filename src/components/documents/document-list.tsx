@@ -85,9 +85,11 @@ function formatFileSize(bytes: number | null): string {
 export function DocumentList({
   data,
   categories,
+  hideHeader,
 }: {
   data: DocumentData[];
   categories: Category[];
+  hideHeader?: boolean;
 }) {
   const router = useRouter();
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -288,19 +290,32 @@ export function DocumentList({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Dokumente</h1>
-          <p className="text-muted-foreground">
-            {data.length} {data.length === 1 ? "Dokument" : "Dokumente"}{" "}
-            insgesamt
-          </p>
+      {!hideHeader && (
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Dokumente</h1>
+            <p className="text-muted-foreground">
+              {data.length} {data.length === 1 ? "Dokument" : "Dokumente"}{" "}
+              insgesamt
+            </p>
+          </div>
+          <Button onClick={() => setUploadOpen(true)}>
+            <Upload className="mr-2 h-4 w-4" />
+            Dokument hochladen
+          </Button>
         </div>
-        <Button onClick={() => setUploadOpen(true)}>
-          <Upload className="mr-2 h-4 w-4" />
-          Dokument hochladen
-        </Button>
-      </div>
+      )}
+      {hideHeader && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">
+            {data.length} {data.length === 1 ? "Vorlage" : "Vorlagen"}
+          </p>
+          <Button onClick={() => setUploadOpen(true)} size="sm">
+            <Upload className="mr-2 h-4 w-4" />
+            Dokument hochladen
+          </Button>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
